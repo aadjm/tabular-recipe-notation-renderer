@@ -1,0 +1,5 @@
+# Go build artifacts
+/trn-render
+*.test
+*.out
+/bin/
