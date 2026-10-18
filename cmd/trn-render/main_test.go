@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,15 @@ const (
 	chaiFixture = "../../testdata/chai.trn.md"
 	chaiDoc     = "../../testdata/chai.doc.html"
 )
+
+// update mirrors the engine package's -update flag (golden_test.go) so that
+// `go test ./... -update` — the command SPEC-ENGINE §6 names — does not fail
+// here with "flag provided but not defined". This package owns no goldens of
+// its own: it compares against the library's output, and the one committed file
+// it reads (chai.doc.html) is rewritten by the engine package. Rewriting it from
+// here too would race that rewrite, because `go test ./...` runs the two test
+// binaries in parallel.
+var update = flag.Bool("update", false, "accepted for `go test ./... -update`; the engine package owns the goldens")
 
 // result is one invocation of run.
 type result struct {
@@ -120,6 +130,9 @@ func TestFlagsMayFollowTheFile(t *testing.T) {
 // browser-verified in TRN-ENG-5: for the canonical chai fixture, --standalone
 // must reproduce testdata/chai.doc.html byte for byte.
 func TestStandaloneMatchesCommittedPage(t *testing.T) {
+	if *update {
+		t.Skip("chai.doc.html is being rewritten by the engine package's -update run")
+	}
 	got := runCLI(t, "", "--standalone", chaiFixture)
 	if got.code != exitOK {
 		t.Fatalf("exit = %d, want %d (stderr: %s)", got.code, exitOK, got.stderr)
