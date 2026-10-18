@@ -22,7 +22,7 @@ filesystem access beyond the input, no state, no JavaScript in its output.
 | Warnings W1, W2, W3, W5, W6, W7 | implemented (parse time) |
 | Warning W4 (ingredient never reaches the final step) | implemented (render time) — `ConvergenceWarnings`, `warnings.go` |
 | Matrix view (`RenderTable`) | implemented — `render_table.go` |
-| Flow view (`RenderFlow`) | not yet implemented |
+| Flow view (`RenderFlow`) | implemented — `render_flow.go` |
 | CLI (`cmd/trn-render`) | not yet implemented |
 
 ## The dialect
@@ -92,6 +92,7 @@ type Warning struct {
 func Parse(input string) (*Recipe, []Warning)
 func ConvergenceWarnings(r *Recipe) []Warning
 func RenderTable(r *Recipe) template.HTML
+func RenderFlow(r *Recipe) template.HTML
 ```
 
 `Parse` never returns an error and never panics: malformed documents degrade to
@@ -115,6 +116,21 @@ its own light/dark stylesheet and a print stylesheet; it contains no JavaScript,
 no images and no external resources. `RenderTable(nil)` returns an empty
 fragment, and no input makes it panic or return an error.
 
+`RenderFlow` returns the flow view (SPEC-ENGINE §4.2) as a self-contained
+fragment of the same kind: one box per step in document order, numbered, with
+the verb as the box header; the ingredients a step introduces as chips; the
+steps a box draws on as a CSS arrow naming each source (`← [1] Crush or grind to
+a powder`); and a visually distinct box for the final step. The boxes sit on a
+vertical rail whose down-arrows show the sequence. The fragment is classed
+(`trn-flow`, `trn-flow-step`, `trn-flow-step-final`, `trn-chip`, `trn-flow-ref`,
+…), carries its own light/dark and print stylesheets, and contains no
+JavaScript, no images and no external resources. `RenderFlow(nil)` returns an
+empty fragment, and no input makes it panic or return an error.
+
+Both renderers read the same AST and agree on how a reference resolves
+(`firstByNumber`: the first appearance of the step number), so the views never
+disagree about which step a `#n` means.
+
 ## Warning codes
 
 | Code | Condition | When |
@@ -132,7 +148,7 @@ fragment, and no input makes it panic or return an error.
 ```console
 $ go test ./...          # fixtures, edge cases, invariants, goldens
 $ go test -race ./...
-$ go test ./... -update  # rewrite testdata/*.table.html goldens
+$ go test ./... -update  # rewrite testdata/*.table.html and *.flow.html goldens
 $ go test -run '^$' -fuzz '^FuzzParse$' -fuzztime 30s
 ```
 
@@ -147,9 +163,20 @@ markers, and the convergence of every ingredient into the final column. It also
 re-derives the expected cells with an independent walk for every fixture, checks
 that the matrix agrees with `ConvergenceWarnings`, and pushes markup, quotes and
 Unicode through every text field to prove user bytes come back intact and never
-become live markup. `golden_test.go` compares `testdata/<name>.trn.md` with the
-committed `testdata/<name>.table.html`; the `.table` suffix leaves
-`<name>.flow.html` free for the flow view.
+become live markup.
+
+`flow_test.go` does the same for the flow view: it reads the boxes back out of
+the fragment and checks the box order and numbering, each box's verb, the chips
+each step introduces, the "again" notes for re-listed ingredients, and one
+rendered reference per written reference in order — with the boxes and refs
+cross-checked against the AST for every fixture. It also covers the cases the
+fixtures do not: a dangling reference (`#9`), duplicated step numbers, a step
+with no items, a self reference and an empty verb, plus a no-JavaScript /
+no-external-resources scan.
+
+`golden_test.go` compares `testdata/<name>.trn.md` with both committed
+`testdata/<name>.table.html` and `testdata/<name>.flow.html`, so every fixture
+is rendered and compared through both views.
 
 `testdata/chai.trn.md` and `testdata/guacamole.trn.md` are the canonical examples
 from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
@@ -239,9 +266,42 @@ The renderer's choices where §4 leaves room, each covered in `render_test.go`:
     only); an empty title omits the `<caption>`; an empty verb (W7) leaves a
     direct cell whose verb span is empty but whose class still marks it as
     direct.
-16. **Goldens are `testdata/<name>.table.html`**, rebuilt with
-    `go test ./... -update`, so the flow view can own `<name>.flow.html` over the
-    same fixtures. The golden covers the whole fragment, stylesheet included.
+16. **Goldens are `testdata/<name>.table.html` and `testdata/<name>.flow.html`**,
+    rebuilt with `go test ./... -update`. Both views are compared for every
+    fixture, so neither can silently lose a fixture, and the golden covers the
+    whole fragment, stylesheet included.
+
+The flow view's choices where §4.2 leaves room, each covered in `flow_test.go`:
+
+17. **Reference arrows are drawn inside the referencing box, naming their
+    source.** §4.2 asks for an arrow connecting the referenced step's box to the
+    referencing one. A drawn line between two arbitrary boxes is not expressible
+    in CSS — the distance depends on font size, wrapping and the heights of the
+    boxes in between, so the renderer would have to bake pixel geometry into the
+    output (and the SVG that would make it easy is forbidden). Instead the boxes
+    sit on a vertical rail with a down-arrow into every box after the first (the
+    sequence of steps), and each reference is an arrow that names the step it
+    comes from — `from ← [1] Crush or grind to a powder` — in the box that makes
+    it. The glyph is CSS-generated (`.trn-flow-ref::before`), so the markup
+    carries no arrows and a re-skin can change them; the word "from" carries the
+    meaning for assistive technology. This is the card's sanctioned fallback
+    (borders/pseudo-elements, or a text arrow — never SVG/images/canvas).
+18. **A chip belongs to the step that first lists the ingredient; a later
+    listing becomes an "again" note.** §4.2 attaches chips to the first
+    appearance, but §10 also requires ingredient strings to survive
+    byte-for-byte, so a re-listed ingredient is not dropped: grocy-1 lists
+    `1 tbsp cilantro` in steps 7 and 10, and step 10 renders it as a dashed,
+    muted chip under an "again" label. Chips plus again notes reproduce each
+    step's ingredient items exactly, in document order — the fuzz target asserts
+    the counts match for arbitrary input.
+19. **The final box is marked three ways**: `trn-flow-step-final` on the list
+    item, a heavier accent border plus a tinted background on the box, and a
+    "final" badge next to the verb — so it stays distinct in print and after
+    re-skinning. It is the last step in document order, the same step W4
+    measures convergence against.
+20. **Chips wrap, and long ingredient text wraps inside its chip** (flex `wrap`
+    plus `overflow-wrap`), so a long list or a long ingredient name never
+    truncates or overflows; the card's fallback explicitly rules out truncation.
 
 ## License
 

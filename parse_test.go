@@ -573,5 +573,32 @@ func FuzzParse(f *testing.F) {
 		if RenderTable(nil) != "" {
 			t.Fatal("RenderTable(nil) is not the empty fragment")
 		}
+
+		// The flow renderer takes the same arbitrary input: one box per step,
+		// one chip (or "again" note) per ingredient item — so no item text is
+		// dropped — and no unescaped script tag.
+		flow := string(RenderFlow(got))
+		if strings.Contains(flow, "<script") {
+			t.Fatalf("rendered flow view contains an unescaped script tag")
+		}
+		if gotBoxes := strings.Count(flow, `<li class="trn-flow-step`); gotBoxes != len(got.Steps) {
+			t.Fatalf("%d flow boxes for %d steps", gotBoxes, len(got.Steps))
+		}
+		items := 0
+		for _, s := range got.Steps {
+			for _, item := range s.Items {
+				if item.Ref == 0 {
+					items++
+				}
+			}
+		}
+		chips := strings.Count(flow, `<li class="trn-chip">`)
+		again := strings.Count(flow, `<span class="trn-chip trn-chip-again">`)
+		if chips+again != items {
+			t.Fatalf("%d chips + %d again notes for %d ingredient items", chips, again, items)
+		}
+		if RenderFlow(nil) != "" {
+			t.Fatal("RenderFlow(nil) is not the empty fragment")
+		}
 	})
 }

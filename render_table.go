@@ -74,13 +74,17 @@ type matrixRow struct {
 type matrixAction struct {
 	Number int
 	Verb   string
-	Refs   []matrixRef // the steps it names, in written order
+	Refs   []stepRef // the steps it names, in written order
 }
 
-// matrixRef is one reference of an action step. Known is false for a reference
-// to a step that does not exist (already reported as W2); such a reference is
-// shown by number only.
-type matrixRef struct {
+// stepRef is one reference written in a step, resolved against the document.
+// Known is false for a reference to a step that does not exist (already
+// reported as W2); such a reference is shown by number only.
+//
+// Both renderers show references — the matrix on its action rows, the flow view
+// on every box — so the type lives here under a view-neutral name rather than
+// being duplicated per view.
+type stepRef struct {
 	Number int
 	Verb   string
 	Known  bool
@@ -157,7 +161,7 @@ func buildMatrix(r *Recipe) matrixView {
 		}
 		action := matrixAction{Number: step.Number, Verb: step.Verb}
 		for _, number := range refs {
-			ref := matrixRef{Number: number}
+			ref := stepRef{Number: number}
 			if j, ok := firstAt[number]; ok {
 				ref.Known = true
 				ref.Verb = r.Steps[j].Verb
