@@ -23,6 +23,7 @@ filesystem access beyond the input, no state, no JavaScript in its output.
 | Warning W4 (ingredient never reaches the final step) | implemented (render time) — `ConvergenceWarnings`, `warnings.go` |
 | Matrix view (`RenderTable`) | implemented — `render_table.go` |
 | Flow view (`RenderFlow`) | implemented — `render_flow.go` |
+| Presentation layer, CSS-only view switcher, standalone document (`RenderDocument`) | implemented — `presentation.go` |
 | CLI (`cmd/trn-render`) | not yet implemented |
 
 ## The dialect
@@ -93,6 +94,7 @@ func Parse(input string) (*Recipe, []Warning)
 func ConvergenceWarnings(r *Recipe) []Warning
 func RenderTable(r *Recipe) template.HTML
 func RenderFlow(r *Recipe) template.HTML
+func RenderDocument(r *Recipe) template.HTML
 ```
 
 `Parse` never returns an error and never panics: malformed documents degrade to
@@ -130,6 +132,58 @@ empty fragment, and no input makes it panic or return an error.
 Both renderers read the same AST and agree on how a reference resolves
 (`firstByNumber`: the first appearance of the step number), so the views never
 disagree about which step a `#n` means.
+
+`RenderDocument` wraps both fragments in one complete page — the recipe title as
+an `h1`, a CSS-only switcher between the views, and both views in the same
+document. It is what the `trn-render` CLI emits for `--standalone`; the site does
+not need it, because the site owns its own page and embeds the fragments. Set
+`Recipe.Title` before calling to override the title shown; a recipe without a
+title falls back to "Recipe". The page declares `lang="en"`, and a nil recipe
+renders an empty page rather than an error.
+
+## Presentation (SPEC-ENGINE §4.3)
+
+The whole presentation layer is CSS that ships inside the output; there is no
+JavaScript anywhere and no request leaves the page.
+
+- **One baseline, embedded everywhere.** `sharedCSS` in `presentation.go` holds
+  the palette custom properties, the system font stack (`system-ui, -apple-system,
+  "Segoe UI", Roboto, …` — no webfonts, no CDN), the `prefers-color-scheme: dark`
+  variant and the print reset. Each view fragment and the standalone page embed
+  that block verbatim, delimited by `/* trn:shared:start */ … /* trn:shared:end */`
+  so a deployment's stylesheet can be audited, and `TestSharedStylesheetIsSingleSource`
+  proves the two views carry exactly the same bytes.
+- **Zero JavaScript, CSS-only switcher.** The view switcher is a radio group —
+  two `input type=radio` with `label`s, styled by `:checked`, driving the two
+  panels through sibling selectors (`#trn-tab-flow:checked ~ .trn-panel-…`).
+  Radios rather than a checkbox or `:target` tabs because the two views are
+  mutually exclusive by nature, and a radio group already carries that meaning:
+  arrow keys move between the options, assistive technology announces the
+  selected one, and no state has to be hidden in a URL fragment. The inputs are
+  visually hidden but stay focusable; the focus ring is drawn on the label.
+- **Light and dark** come from CSS custom properties flipped by
+  `prefers-color-scheme`. Every foreground/background pair the views use is
+  checked by `TestPaletteContrast` against the hex values actually emitted:
+  text pairs clear 4.5:1 and the CSS-generated glyphs clear 3:1, in both schemes
+  and in print.
+- **Print is a first-class target.** The tabular view is the printed view: in
+  print the switcher is removed, the flow panel is suppressed and the matrix is
+  forced visible whatever is selected on screen. The matrix then prints on a
+  landscape page (`@page{size:landscape}`), in 8pt with a fixed layout, wrapping
+  headers, a header row repeated on every page and rows that do not split across
+  pages — so a ten-step recipe still fits and stays readable. No screen-only
+  chrome is printed.
+- **Accessibility.** `lang` on the page, one `h1` (the recipe title) followed by
+  an `h2` per view panel and the flow view's `h3` step boxes — a logical
+  outline; panels are labelled by their tab (`aria-labelledby`); the matrix is a
+  real `<table>` with `<th scope="col">` and `<th scope="row">`; the flow marker
+  glyph is `aria-hidden` because the row and column headers already say what it
+  means.
+- **Re-skinning.** Every element carries a `trn-*` class (`trn-table`,
+  `trn-cell-direct`, `trn-cell-flow`, `trn-action`, `trn-flow`,
+  `trn-flow-step-final`, `trn-chip`, …), and colours come only from the
+  `--trn-*` custom properties, so the embedding site can restyle the views with
+  its own CSS without touching the markup or the engine.
 
 ## Warning codes
 
@@ -178,6 +232,17 @@ no-external-resources scan.
 `testdata/<name>.table.html` and `testdata/<name>.flow.html`, so every fixture
 is rendered and compared through both views.
 
+`presentation_test.go` covers §4.3: it locates the shared baseline in every
+fragment and in the page and compares the bytes, scans the page for scripts,
+event handlers and external references, checks the switcher's wiring and its
+`:checked` rules (and that the inputs precede the panels, which the CSS sibling
+selectors depend on), checks the heading order, `lang`, the panel labelling and
+the scoped table headers, asserts the print rules, computes WCAG contrast ratios
+from the palette actually emitted, and keeps one committed standalone page
+(`testdata/chai.doc.html`) under golden test — the same artifact the browser
+check opens. `go test ./... -update` rewrites that golden along with the two
+per-view goldens.
+
 `testdata/chai.trn.md` and `testdata/guacamole.trn.md` are the canonical examples
 from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
 [TheSonOfThomp/recipe-parser](https://github.com/TheSonOfThomp/recipe-parser)
@@ -190,6 +255,10 @@ instance, fetched read-only — recipe text only, never the API key.
 ```console
 $ trn-render recipe.trn.md --standalone > recipe.html
 ```
+
+`--standalone` is `RenderDocument`: one page, both views, the CSS-only switcher,
+no request and no script. `trn-render recipe.trn.md` (no flag) prints the two
+fragments, which is what the site embeds.
 
 ## Decisions
 
@@ -303,6 +372,37 @@ The flow view's choices where §4.2 leaves room, each covered in `flow_test.go`:
 20. **Chips wrap, and long ingredient text wraps inside its chip** (flex `wrap`
     plus `overflow-wrap`), so a long list or a long ingredient name never
     truncates or overflows; the card's fallback explicitly rules out truncation.
+
+The presentation layer's choices where §4.3 leaves room, each covered in
+`presentation_test.go`:
+
+21. **The view switcher is a radio group**, not a checkbox or a `:target` tab
+    pair (both of which the spec allows). Two views are mutually exclusive, and a
+    radio group already means exactly that: one of two checked, arrow keys moving
+    between them, the selected state announced by assistive technology, and no
+    state stored in the URL or in a control that reads as "on/off". Only
+    `:checked` is used as a selector, so the constraint that matters — zero
+    JavaScript — holds exactly as it would for a checkbox.
+22. **In the standalone page the title is shown once.** The page `h1` carries it;
+    the fragments keep their own `<caption>`/`<figcaption>` so a fragment used
+    alone is still self-describing, but in document context they are visually
+    hidden (the caption keeps naming the table for assistive technology) rather
+    than repeated above both views.
+23. **Print prints the matrix, whatever is selected on screen, on a landscape
+    page.** The tabular view is the notation (§4.3, "the whole point of a
+    notation"), the switcher is screen chrome, so print suppresses the flow panel
+    and the tabs and forces the matrix. `@page{size:landscape}` (default paper,
+    landscape orientation) is declared in the table fragment's own print block
+    because a ten-column matrix at a readable size does not fit portrait A4 —
+    verified by printing to PDF and reading the pages back. A page style cannot
+    be scoped to a selector, so this is the one presentation rule that reaches
+    past the fragment; an embedding site can override it with a later `@page`
+    rule of its own.
+24. **`lang="en"` is stated by the engine's page.** The dialect carries no
+    language, the site owns its own `<html>`, and §5 defines no CLI flag for it —
+    so the one document the engine writes says the language it serves instead of
+    omitting the attribute (which would leave screen readers guessing at
+    pronunciation). A future `--lang` flag maps onto that constant.
 
 ## License
 
