@@ -275,17 +275,18 @@ The flow view's choices where §4.2 leaves room, each covered in `flow_test.go`:
 
 17. **Reference arrows are drawn inside the referencing box, naming their
     source.** §4.2 asks for an arrow connecting the referenced step's box to the
-    referencing one. A drawn line between two arbitrary boxes is not expressible
-    in CSS — the distance depends on font size, wrapping and the heights of the
-    boxes in between, so the renderer would have to bake pixel geometry into the
-    output (and the SVG that would make it easy is forbidden). Instead the boxes
-    sit on a vertical rail with a down-arrow into every box after the first (the
-    sequence of steps), and each reference is an arrow that names the step it
-    comes from — `from ← [1] Crush or grind to a powder` — in the box that makes
-    it. The glyph is CSS-generated (`.trn-flow-ref::before`), so the markup
-    carries no arrows and a re-skin can change them; the word "from" carries the
-    meaning for assistive technology. This is the card's sanctioned fallback
-    (borders/pseudo-elements, or a text arrow — never SVG/images/canvas).
+    referencing one. A continuous connector is only straightforward between
+    neighbouring boxes: the gap depends on font size, wrapping and the heights of
+    the boxes in between, so an edge between non-adjacent boxes would need pixel
+    (or grid-row) geometry baked into the output — and the SVG that would make it
+    easy is forbidden. Instead the boxes sit on a vertical rail with a down-arrow
+    into every box after the first (the sequence of steps), and each reference is
+    an arrow that names the step it comes from — `from ← [1] Crush or grind to a
+    powder` — in the box that makes it. The glyph is CSS-generated
+    (`.trn-flow-ref::before`), so the markup carries no arrows and a re-skin can
+    change them; the word "from" carries the meaning for assistive technology.
+    This is the card's sanctioned fallback (borders/pseudo-elements, or a text
+    arrow — never SVG/images/canvas).
 18. **A chip belongs to the step that first lists the ingredient; a later
     listing becomes an "again" note.** §4.2 attaches chips to the first
     appearance, but §10 also requires ingredient strings to survive
