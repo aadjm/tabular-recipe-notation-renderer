@@ -14,7 +14,7 @@ const (
 	codeSequence = "W1" // step numbers not strictly increasing from 1
 	codeMissing  = "W2" // reference points to a step that does not exist
 	codeForward  = "W3" // reference points to a later step
-	codeFinal    = "W4" // ingredient never reaches the final step
+	codeFinal    = "W4" // ingredient never reaches the final step (ConvergenceWarnings)
 	codeNoSteps  = "W5" // document contains no steps
 	codeNoTitle  = "W6" // empty title
 	codeNoVerb   = "W7" // step verb is empty

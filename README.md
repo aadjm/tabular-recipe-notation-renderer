@@ -20,7 +20,7 @@ filesystem access beyond the input, no state, no JavaScript in its output.
 |---|---|
 | Parser + AST (`Parse`) | implemented — `parse.go`, `types.go` |
 | Warnings W1, W2, W3, W5, W6, W7 | implemented (parse time) |
-| Warning W4 (ingredient never reaches the final step) | reserved — computed at render time |
+| Warning W4 (ingredient never reaches the final step) | implemented (render time) — `ConvergenceWarnings`, `warnings.go` |
 | Renderers (`RenderTable`, `RenderFlow`) | not yet implemented |
 | CLI (`cmd/trn-render`) | not yet implemented |
 
@@ -89,11 +89,18 @@ type Warning struct {
 }
 
 func Parse(input string) (*Recipe, []Warning)
+func ConvergenceWarnings(r *Recipe) []Warning
 ```
 
 `Parse` never returns an error and never panics: malformed documents degrade to
 warnings, never to a failed parse. Warnings come back in code order (W1 … W7),
 stable within a code.
+
+`ConvergenceWarnings` is the render-time half of the warning channel: it
+returns W4 for every ingredient that never reaches the final step, directly or
+transitively. Callers append its result to the parser's warnings (re-sort the
+merged slice if the `W1 … W7` order matters). It and the renderers share
+`ancestorSteps`, the transitive back-reference closure used for matrix cells.
 
 ## Warning codes
 
@@ -114,6 +121,11 @@ $ go test ./...          # fixtures, edge cases, invariants
 $ go test -race ./...
 $ go test -run '^$' -fuzz '^FuzzParse$' -fuzztime 30s
 ```
+
+`warnings_test.go` holds one minimal, table-driven document per warning code
+W1 … W7, plus the reachability cases behind W4 (transitive chains, stranded
+ingredients, repeated ingredients, dangling refs, cycles, duplicated step
+numbers). `parse_test.go` covers the dialect itself.
 
 `testdata/chai.trn.md` and `testdata/guacamole.trn.md` are the canonical examples
 from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
@@ -156,9 +168,13 @@ covered by a test in `parse_test.go`.
    third step, which would have to be 3); `[3] [2] [1]` reports two (positions 1
    and 3 — position 2 happens to hold the right number). A duplicated number
    resolves to its first appearance when a reference is resolved.
-8. **W4 is a render-time warning.** Reachability needs the whole matrix, so the
-   parser reserves the code but does not emit it; the renderer reports it through
-   the same `[]Warning` channel.
+8. **W4 is a render-time warning.** Reachability needs the whole reference
+   graph, so `Parse` reserves the code and never emits it; `ConvergenceWarnings`
+   reports it through the same `[]Warning` channel. The final step is the last
+   step in document order, ingredient identity is the exact item text, and a
+   reference resolves to the first appearance of its step number — the same
+   rule used for W2/W3. Dangling references and reference cycles are handled
+   without error: cycles terminate, dangling refs are ignored (already W2).
 9. **The title is trimmed** of surrounding whitespace, and a leading UTF-8 BOM is
    stripped (invisible in editors, otherwise absorbed into the title).
 10. **Only ASCII trailing whitespace is ignored** per line (space, tab, `\r`,

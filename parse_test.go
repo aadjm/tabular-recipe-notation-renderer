@@ -49,8 +49,10 @@ func codes(warnings []Warning) []string {
 }
 
 // check parses input, compares the AST with want and asserts that every
-// warning carries a known code and a non-empty message.
-func check(t *testing.T, input string, want *Recipe) []Warning {
+// warning carries a known code and a non-empty message. It returns the recipe
+// and the parse-time warnings; W4 is render-time and comes from
+// ConvergenceWarnings (see warnings_test.go).
+func check(t *testing.T, input string, want *Recipe) (*Recipe, []Warning) {
 	t.Helper()
 	got, warnings := Parse(input)
 	if got == nil {
@@ -67,7 +69,7 @@ func check(t *testing.T, input string, want *Recipe) []Warning {
 			t.Errorf("warning %d (%s) has an empty message", i, w.Code)
 		}
 	}
-	return warnings
+	return got, warnings
 }
 
 // dump renders a recipe compactly so failures are readable.
@@ -149,9 +151,12 @@ func TestParseCanonicalFixtures(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			input := readFixture(t, tc.file)
-			warnings := check(t, input, tc.want)
-			if len(warnings) != 0 {
-				t.Errorf("canonical example produced warnings: %v", codes(warnings))
+			got, warnings := check(t, input, tc.want)
+			// The canonical examples must be clean on the full channel: parse
+			// warnings plus the render-time convergence rule (W4).
+			all := append(warnings, ConvergenceWarnings(got)...)
+			if len(all) != 0 {
+				t.Errorf("canonical example produced warnings: %v", all)
 			}
 		})
 	}
@@ -180,8 +185,9 @@ func TestParseLiveGrocyFixtures(t *testing.T) {
 		file := "grocy-" + strconv.Itoa(id) + ".trn.md"
 		t.Run(file, func(t *testing.T) {
 			got, warnings := Parse(readFixture(t, file))
-			if len(warnings) != 0 {
-				t.Errorf("warnings: %v", warnings)
+			all := append(warnings, ConvergenceWarnings(got)...)
+			if len(all) != 0 {
+				t.Errorf("warnings: %v", all)
 			}
 			if got.Title == "" {
 				t.Error("empty title")
@@ -430,7 +436,7 @@ func TestParseEdgeCases(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			warnings := check(t, tc.input, tc.want)
+			_, warnings := check(t, tc.input, tc.want)
 			if got := codes(warnings); !reflect.DeepEqual(got, tc.codes) {
 				t.Errorf("warning codes = %v, want %v", got, tc.codes)
 			}
@@ -516,6 +522,26 @@ func FuzzParse(f *testing.F) {
 		for i := 1; i < len(warnings); i++ {
 			if warnings[i-1].Code > warnings[i].Code {
 				t.Fatalf("warnings out of order: %v", codes(warnings))
+			}
+		}
+		// The render-time half of the channel must hold the same invariants,
+		// and it can never report more stranded ingredients than the document
+		// has distinct ingredient strings.
+		seen := make(map[string]bool, len(warnings))
+		for _, s := range got.Steps {
+			for _, item := range s.Items {
+				if item.Ref == 0 {
+					seen[item.Text] = true
+				}
+			}
+		}
+		renderWarnings := ConvergenceWarnings(got)
+		if len(renderWarnings) > len(seen) {
+			t.Fatalf("%d W4s for %d distinct ingredients", len(renderWarnings), len(seen))
+		}
+		for _, w := range renderWarnings {
+			if w.Code != "W4" || w.Msg == "" {
+				t.Fatalf("bad render warning %#v", w)
 			}
 		}
 	})
