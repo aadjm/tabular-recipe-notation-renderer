@@ -24,7 +24,7 @@ filesystem access beyond the input, no state, no JavaScript in its output.
 | Matrix view (`RenderTable`) | implemented — `render_table.go` |
 | Flow view (`RenderFlow`) | implemented — `render_flow.go` |
 | Presentation layer, CSS-only view switcher, standalone document (`RenderDocument`) | implemented — `presentation.go` |
-| CLI (`cmd/trn-render`) | not yet implemented |
+| CLI (`cmd/trn-render`) | implemented — `cmd/trn-render/main.go` |
 
 ## The dialect
 
@@ -250,15 +250,51 @@ verbatim, trailing spaces included. `testdata/grocy-1.trn.md` … `grocy-5.trn.m
 are the five real recipes carried by the `trn` userfield on the live Grocy
 instance, fetched read-only — recipe text only, never the API key.
 
-## Usage (once the CLI lands)
+`cmd/trn-render` tests the wrapper, not the renderers: the fragment output is
+compared with `RenderTable` / `RenderFlow` (and with the committed per-view
+goldens), the standalone page with the committed `testdata/chai.doc.html`, so the
+CLI cannot drift from the library. Around that it pins the command-line contract
+itself — flags before and after the file argument, both stdin spellings,
+`--title` escaping, warnings on stderr with exit 0, I/O failures with exit 1,
+usage errors with exit 2, `--`, and two consecutive runs that must not share
+state.
 
-```console
-$ trn-render recipe.trn.md --standalone > recipe.html
+## Usage
+
+```
+trn-render [flags] [file.md | -]
+  --view table|flow|both   which view(s) to write (default both)
+  --standalone             write a complete <!doctype html>…</html> page
+  --title <text>           override the document title
+  -h, --help               print the usage
 ```
 
-`--standalone` is `RenderDocument`: one page, both views, the CSS-only switcher,
-no request and no script. `trn-render recipe.trn.md` (no flag) prints the two
-fragments, which is what the site embeds.
+`file.md`, `-`, or no argument at all reads standard input. Flags may come
+before or after the file argument, values may be attached with `=` or given as
+the next argument, and `--` ends flag parsing.
+
+```console
+$ go build ./cmd/trn-render                 # or: go install …/cmd/trn-render@latest
+$ trn-render recipe.trn.md --standalone > recipe.html
+$ trn-render recipe.trn.md --view table > matrix.html
+$ cat recipe.trn.md | trn-render
+$ trn-render - < recipe.trn.md
+```
+
+`--standalone` writes `RenderDocument`: one self-contained page, both views
+behind the CSS-only switcher, no request and no script. Without it the command
+writes the requested view fragment(s) — the matrix, the flow view, or both
+separated by a newline — which is what the site embeds.
+
+Exit status is 0 for every document that was rendered, warnings or not; 1 if the
+input could not be read or the output could not be written; 2 for a usage error
+(unknown flag, bad `--view`, a second file argument). Warnings (W1 … W7, W4
+included) are printed to stderr, one `trn-render: W2: …` line each, and never
+change the exit status.
+
+SPEC-ENGINE §5 writes the path as `engine/cmd/trn-render/main.go`; this
+repository's root **is** the engine module, so the command lives at
+`cmd/trn-render/main.go`.
 
 ## Decisions
 
@@ -403,6 +439,38 @@ The presentation layer's choices where §4.3 leaves room, each covered in
     so the one document the engine writes says the language it serves instead of
     omitting the attribute (which would leave screen readers guessing at
     pronunciation). A future `--lang` flag maps onto that constant.
+25. **A standalone page always carries both views; `--view` selects fragments.**
+    `--standalone` is §5's "wrap in `<!doctype html>…</html>`", and the engine's
+    page is the presentation layer's page: both views behind the switcher. The
+    CLI therefore hands `--standalone` to `RenderDocument` unchanged and lets
+    `--view` choose the fragment output only; the usage text says so rather than
+    leaving a flag quietly half-applied. `--view table --standalone` is not an
+    error — it is the page, whose print stylesheet already prints the matrix
+    whatever is selected (decision 23). A single-view page would need another
+    library API, not a second wrapper in `main.go`.
+26. **The CLI parses its own command line, GNU-style.** `flag` stops at the
+    first positional argument, so `trn-render fixture.md --view table
+    --standalone` — the order the acceptance criteria use — would lose its
+    flags. The wrapper accepts them before or after the file, `--flag=value` and
+    `--flag value`, and `--` to end flags; `-` stays a positional and means
+    stdin. It is a ~60-line loop, still stdlib only, and it validates `--view`
+    instead of silently ignoring a typo.
+27. **Exit 2 is for the command line, not the document.** §5 says non-zero exit
+    only on I/O failures, which is exactly true of the document path: any input
+    that can be read renders and exits 0, warnings or not. A malformed command
+    line has no document to render and also matches the convention Go's own
+    `flag` package enforces (it exits 2 on an unknown flag), so usage errors
+    exit 2 with the reason and the usage on stderr. The two failure classes are
+    documented apart so a script can tell "bad invocation" from "bad path".
+28. **The CLI reports the whole W1 … W7 set, in code order.** `Parse` returns
+    W1, W2, W3, W5, W6 and W7; W4 only exists at render time
+    (`ConvergenceWarnings`), so the wrapper merges the two slices and
+    stable-sorts by code — the same order §3 promises for the parser's half —
+    before printing them as `trn-render: W4: …` lines on stderr. §5 says
+    warnings are printed when standalone; the wrapper prints them in fragment
+    mode too, because stdout is the artifact in both modes and stderr is free.
+    Warnings never suppress output: the document renders byte for byte as the
+    library would render it.
 
 ## License
 
