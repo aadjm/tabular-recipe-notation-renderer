@@ -3,3 +3,8 @@
 *.test
 *.out
 /bin/
+
+# Local tool state that lands in the working copy (not part of the module)
+proxmox-jobs.sqlite3
+proxmox-jobs.sqlite3-shm
+proxmox-jobs.sqlite3-wal
