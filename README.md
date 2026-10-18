@@ -248,7 +248,10 @@ from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
 [TheSonOfThomp/recipe-parser](https://github.com/TheSonOfThomp/recipe-parser)
 verbatim, trailing spaces included. `testdata/grocy-1.trn.md` … `grocy-5.trn.md`
 are the five real recipes carried by the `trn` userfield on the live Grocy
-instance, fetched read-only — recipe text only, never the API key.
+instance, fetched read-only — recipe text only, never the API key. They are
+committed byte for byte, so recipes 1–3 keep the userfield's missing final
+newline; a test pins each file to a digest recorded at fetch time, and
+`testdata/README.md` documents the provenance and the refetch procedure.
 
 `cmd/trn-render` tests the wrapper, not the renderers: the fragment output is
 compared with `RenderTable` / `RenderFlow` (and with the committed per-view

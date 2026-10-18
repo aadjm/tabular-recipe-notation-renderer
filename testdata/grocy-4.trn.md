@@ -5,4 +5,3 @@ Margherita Pizza
   [4] Grate: 200g mozzarella
   [5] Top: 1 pizza base, #3, #4
   [6] Bake at 220C for 12 minutes: #5, a few basil leaves
-
