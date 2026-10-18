@@ -24,7 +24,14 @@ func RenderTable(r *Recipe) template.HTML {
 		return ""
 	}
 	var buf bytes.Buffer
-	if err := tableTemplate.Execute(&buf, buildMatrix(r)); err != nil {
+	// The shared presentation baseline (presentation.go) travels inside this
+	// fragment, so the fragment renders the same alone as it does inside
+	// RenderDocument's page.
+	err := tableTemplate.Execute(&buf, tableFragment{
+		CSS:        template.CSS(sharedCSS),
+		matrixView: buildMatrix(r),
+	})
+	if err != nil {
 		// Unreachable: the template is a compile-time constant and the data is
 		// plain strings and ints. Degrade to an empty fragment anyway — this
 		// package never turns a rendering problem into a panic.
@@ -44,6 +51,13 @@ const (
 	cellDirect = "direct" // ingredient listed in the step: the cell shows the step verb
 	cellFlow   = "flow"   // ingredient reaches the step through back-references: flow marker
 )
+
+// tableFragment is the data set for the table template: the shared presentation
+// baseline plus the matrix model of one recipe.
+type tableFragment struct {
+	CSS template.CSS
+	matrixView
+}
 
 // matrixView is the whole data set handed to the table template.
 type matrixView struct {
@@ -193,8 +207,7 @@ func containsIndex(list []int, idx int) bool {
 // already say which ingredient and which step it belongs to).
 var tableTemplate = template.Must(template.New("trn.table").Parse(`<div class="trn trn-view trn-view-table">
 <style>
-.trn-view-table{--trn-fg:#1c1b19;--trn-bg:#fffefb;--trn-line:#cdc7bb;--trn-head:#f2eee4;--trn-direct:#fff8e4;--trn-mark:#9a6b1f;--trn-muted:#6b655b;box-sizing:border-box;max-width:100%;overflow-x:auto;padding:.5rem;color:var(--trn-fg);background:var(--trn-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:.95rem;line-height:1.35}
-@media (prefers-color-scheme:dark){.trn-view-table{--trn-fg:#e9e5dc;--trn-bg:#151412;--trn-line:#3b3833;--trn-head:#24211c;--trn-direct:#2a2517;--trn-mark:#e0b463;--trn-muted:#a49c8e}}
+{{.CSS}}.trn-view-table{overflow-x:auto;padding:.5rem}
 .trn-table{border-collapse:collapse;width:100%}
 .trn-table caption{text-align:left;font-weight:600;padding:0 0 .5rem}
 .trn-table th,.trn-table td{border:1px solid var(--trn-line);padding:.35rem .5rem;vertical-align:top;text-align:left}
@@ -208,7 +221,7 @@ var tableTemplate = template.Must(template.New("trn.table").Parse(`<div class="t
 .trn-action-refs{margin-left:.5rem;color:var(--trn-muted);font-weight:400;font-size:.9em}
 .trn-action-refs::before{content:"← ";color:var(--trn-mark)}
 .trn-action-ref{display:inline-block}
-@media print{.trn-view-table{--trn-fg:#000;--trn-bg:#fff;--trn-line:#666;--trn-head:#eee;--trn-direct:#fff;--trn-mark:#000;--trn-muted:#333;color:#000;background:#fff;overflow:visible;padding:0;font-size:10pt}.trn-view-table .trn-table{caption-side:top}.trn-table tr{break-inside:avoid;page-break-inside:avoid}.trn-table thead{display:table-header-group}}
+@media print{@page{size:landscape;margin:10mm}.trn-view-table{overflow:visible;padding:0}.trn-view-table .trn-table{font-size:8pt;table-layout:fixed;width:100%}.trn-view-table .trn-table th:first-child{width:15%}.trn-table th,.trn-table td{padding:.2rem .3rem;overflow-wrap:break-word}.trn-table thead th{white-space:normal}.trn-view-table .trn-table{caption-side:top}.trn-table tr{break-inside:avoid;page-break-inside:avoid}.trn-table thead{display:table-header-group}}
 </style>
 <table class="trn-table">
 {{if .Title}}<caption class="trn-title">{{.Title}}</caption>

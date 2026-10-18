@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masala Chai</title>
+<style>
+:root{color-scheme:light dark}
+.trn-doc{margin:0;padding:1.25rem}
+.trn-doc-title{margin:0 0 .9rem;font-size:1.35rem;line-height:1.25}
+.trn-views{position:relative}
+.trn-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.trn-view-toggle{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.trn-tab{display:inline-block;margin:0 .3rem 0 0;padding:.35rem .8rem;border:1px solid var(--trn-line);border-bottom:0;border-radius:.4rem .4rem 0 0;background:var(--trn-head);color:var(--trn-muted);cursor:pointer;font-size:.9rem;font-weight:500}
+.trn-view-toggle:checked+.trn-tab{background:var(--trn-bg);color:var(--trn-fg);font-weight:600;border-color:var(--trn-mark)}
+.trn-view-toggle:focus-visible+.trn-tab{outline:2px solid var(--trn-mark);outline-offset:2px}
+.trn-panel{border:1px solid var(--trn-line);border-radius:0 .4rem .4rem;padding:.6rem}
+.trn-panel-flow{display:none}
+#trn-tab-flow:checked~.trn-panel-table{display:none}
+#trn-tab-flow:checked~.trn-panel-flow{display:block}
+.trn-doc .trn-title{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@media print{.trn-doc{padding:0}.trn-view-toggle,.trn-tab{display:none}.trn-panel{border:0;border-radius:0;padding:0}.trn-panel-flow{display:none!important}.trn-panel-table{display:block!important}}
+</style>
+</head>
+<body class="trn trn-doc">
+<h1 class="trn-doc-title">Masala Chai</h1>
+<div class="trn-views">
+<input type="radio" name="trn-view" id="trn-tab-table" class="trn-view-toggle" checked>
+<label for="trn-tab-table" id="trn-label-table" class="trn-tab">Table</label>
+<input type="radio" name="trn-view" id="trn-tab-flow" class="trn-view-toggle">
+<label for="trn-tab-flow" id="trn-label-flow" class="trn-tab">Flow</label>
+<section class="trn-panel trn-panel-table" id="trn-panel-table" aria-labelledby="trn-label-table">
+<h2 class="trn-panel-heading trn-sr-only">Table</h2>
+<div class="trn trn-view trn-view-table">
+<style>
+/* trn:shared:start */
+.trn{--trn-fg:#1c1b19;--trn-bg:#fffefb;--trn-line:#cdc7bb;--trn-head:#f2eee4;--trn-direct:#fff8e4;--trn-mark:#9a6b1f;--trn-muted:#6b655b;box-sizing:border-box;max-width:100%;color:var(--trn-fg);background:var(--trn-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:.95rem;line-height:1.35}
+@media (prefers-color-scheme:dark){.trn{--trn-fg:#e9e5dc;--trn-bg:#151412;--trn-line:#3b3833;--trn-head:#24211c;--trn-direct:#2a2517;--trn-mark:#e0b463;--trn-muted:#a49c8e}}
+@media print{.trn{--trn-fg:#000000;--trn-bg:#ffffff;--trn-line:#666666;--trn-head:#eeeeee;--trn-direct:#ffffff;--trn-mark:#000000;--trn-muted:#333333;color:#000;background:#fff;font-size:10pt}}
+/* trn:shared:end */
+.trn-view-table{overflow-x:auto;padding:.5rem}
+.trn-table{border-collapse:collapse;width:100%}
+.trn-table caption{text-align:left;font-weight:600;padding:0 0 .5rem}
+.trn-table th,.trn-table td{border:1px solid var(--trn-line);padding:.35rem .5rem;vertical-align:top;text-align:left}
+.trn-table thead th{background:var(--trn-head);font-weight:600;white-space:nowrap}
+.trn-table tbody th.trn-ingredient{font-weight:500}
+.trn-step-num,.trn-action-num{font-variant-numeric:tabular-nums;color:var(--trn-muted)}
+.trn-cell-direct{background:var(--trn-direct)}
+.trn-mark::before{content:"→";color:var(--trn-mark);font-weight:700;opacity:.85}
+.trn-action-cell{background:var(--trn-head);font-weight:500}
+.trn-action-verb{font-weight:600}
+.trn-action-refs{margin-left:.5rem;color:var(--trn-muted);font-weight:400;font-size:.9em}
+.trn-action-refs::before{content:"← ";color:var(--trn-mark)}
+.trn-action-ref{display:inline-block}
+@media print{@page{size:landscape;margin:10mm}.trn-view-table{overflow:visible;padding:0}.trn-view-table .trn-table{font-size:8pt;table-layout:fixed;width:100%}.trn-view-table .trn-table th:first-child{width:15%}.trn-table th,.trn-table td{padding:.2rem .3rem;overflow-wrap:break-word}.trn-table thead th{white-space:normal}.trn-view-table .trn-table{caption-side:top}.trn-table tr{break-inside:avoid;page-break-inside:avoid}.trn-table thead{display:table-header-group}}
+</style>
+<table class="trn-table">
+<caption class="trn-title">Masala Chai</caption>
+<thead>
+<tr class="trn-head">
+<th scope="col" class="trn-corner">Ingredient</th>
+<th scope="col" class="trn-step"><span class="trn-step-num">[1]</span> <span class="trn-step-verb">Crush or grind to a powder</span></th>
+<th scope="col" class="trn-step"><span class="trn-step-num">[2]</span> <span class="trn-step-verb">Boil 3 min in 360ml water until the decoction is dark</span></th>
+<th scope="col" class="trn-step"><span class="trn-step-num">[3]</span> <span class="trn-step-verb">Add and bring to a boil</span></th>
+<th scope="col" class="trn-step"><span class="trn-step-num">[4]</span> <span class="trn-step-verb">Simmer 2 min until dark with a cream layer and no raw milk flavour</span></th>
+<th scope="col" class="trn-step"><span class="trn-step-num">[5]</span> <span class="trn-step-verb">Pull 4-5 times from 1-1.5 ft, then strain into cups and serve</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">4 green cardamoms</th>
+<td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Crush or grind to a powder</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">2 cloves</th>
+<td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Crush or grind to a powder</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">3g cinnamon</th>
+<td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Crush or grind to a powder</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">2 peppercorns</th>
+<td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Crush or grind to a powder</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">1/2 inch ginger crushed</th>
+<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Boil 3 min in 360ml water until the decoction is dark</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">6g black tea</th>
+<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Boil 3 min in 360ml water until the decoction is dark</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">240ml full-fat milk</th>
+<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Add and bring to a boil</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-row">
+<th scope="row" class="trn-ingredient">12g sugar</th>
+<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Add and bring to a boil</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
+</tr>
+<tr class="trn-action">
+<td class="trn-action-cell" colspan="6"><span class="trn-action-num">[4]</span> <span class="trn-action-verb">Simmer 2 min until dark with a cream layer and no raw milk flavour</span> <span class="trn-action-refs"><span class="trn-action-ref">[3] Add and bring to a boil</span> </span></td>
+</tr>
+<tr class="trn-action">
+<td class="trn-action-cell" colspan="6"><span class="trn-action-num">[5]</span> <span class="trn-action-verb">Pull 4-5 times from 1-1.5 ft, then strain into cups and serve</span> <span class="trn-action-refs"><span class="trn-action-ref">[4] Simmer 2 min until dark with a cream layer and no raw milk flavour</span> </span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+</section>
+<section class="trn-panel trn-panel-flow" id="trn-panel-flow" aria-labelledby="trn-label-flow">
+<h2 class="trn-panel-heading trn-sr-only">Flow</h2>
+<figure class="trn trn-view trn-view-flow">
+<style>
+/* trn:shared:start */
+.trn{--trn-fg:#1c1b19;--trn-bg:#fffefb;--trn-line:#cdc7bb;--trn-head:#f2eee4;--trn-direct:#fff8e4;--trn-mark:#9a6b1f;--trn-muted:#6b655b;box-sizing:border-box;max-width:100%;color:var(--trn-fg);background:var(--trn-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:.95rem;line-height:1.35}
+@media (prefers-color-scheme:dark){.trn{--trn-fg:#e9e5dc;--trn-bg:#151412;--trn-line:#3b3833;--trn-head:#24211c;--trn-direct:#2a2517;--trn-mark:#e0b463;--trn-muted:#a49c8e}}
+@media print{.trn{--trn-fg:#000000;--trn-bg:#ffffff;--trn-line:#666666;--trn-head:#eeeeee;--trn-direct:#ffffff;--trn-mark:#000000;--trn-muted:#333333;color:#000;background:#fff;font-size:10pt}}
+/* trn:shared:end */
+.trn-view-flow{--trn-accent:#9a6b1f;--trn-final:#fdf4e0;margin:0;padding:.5rem}
+@media (prefers-color-scheme:dark){.trn-view-flow{--trn-accent:#e0b463;--trn-final:#241f14}}
+.trn-flow-title{margin:0 0 .6rem;font-weight:600}
+.trn-flow{list-style:none;margin:0;padding:0}
+.trn-flow-step{position:relative;margin:0 0 1.15rem;padding-left:1.9rem}
+.trn-flow-step:last-child{margin-bottom:0}
+.trn-flow-step::before{content:"";position:absolute;left:.7rem;top:0;width:2px;height:calc(100% + 1.15rem);background:var(--trn-line)}
+.trn-flow-step:first-child::before{top:1.1rem;height:calc(100% + .05rem)}
+.trn-flow-step:last-child::before{height:1.1rem}
+.trn-flow-step + .trn-flow-step::after{content:"";position:absolute;left:.7rem;top:-.45rem;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--trn-line);transform:translateX(-4px)}
+.trn-flow-box{position:relative;border:1px solid var(--trn-line);border-radius:.5rem;background:var(--trn-head);padding:.55rem .7rem}
+.trn-flow-box::before{content:"";position:absolute;left:-1.2rem;top:1.05rem;width:1.2rem;height:2px;background:var(--trn-line)}
+.trn-flow-head{margin:0;font-size:1rem;font-weight:600}
+.trn-flow-num{font-variant-numeric:tabular-nums;color:var(--trn-muted);font-weight:500}
+.trn-flow-chips{list-style:none;display:flex;flex-wrap:wrap;gap:.3rem;margin:.45rem 0 0;padding:0}
+.trn-chip{display:inline-block;max-width:100%;border:1px solid var(--trn-line);border-radius:999px;background:var(--trn-bg);padding:.1rem .55rem;font-size:.9em;overflow-wrap:anywhere}
+.trn-flow-again{margin:.35rem 0 0;color:var(--trn-muted);font-size:.9em}
+.trn-flow-again-label,.trn-flow-refs-label{font-variant:small-caps;letter-spacing:.04em}
+.trn-chip-again{border-style:dashed;background:transparent;color:var(--trn-muted)}
+.trn-flow-refs{margin:.4rem 0 0;padding-top:.35rem;border-top:1px dashed var(--trn-line);font-size:.9em;color:var(--trn-muted)}
+.trn-flow-ref{display:inline-block}
+.trn-flow-ref::before{content:"← ";color:var(--trn-mark);font-weight:700}
+.trn-flow-ref-num{font-variant-numeric:tabular-nums;color:var(--trn-mark);font-weight:600}
+.trn-flow-ref-unknown .trn-flow-ref-num{color:var(--trn-muted);font-weight:500}
+.trn-flow-step-final .trn-flow-box{border:2px solid var(--trn-accent);background:var(--trn-final)}
+.trn-flow-final-badge{margin-left:.35rem;padding:0 .3rem;border:1px solid var(--trn-accent);border-radius:.25rem;color:var(--trn-accent);font-size:.7em;font-weight:600;letter-spacing:.06em;text-transform:uppercase;vertical-align:.15em}
+@media print{.trn-view-flow{--trn-accent:#000;--trn-final:#fff;padding:0}.trn-flow-step{break-inside:avoid;page-break-inside:avoid}.trn-flow-step-final .trn-flow-box{border-style:double;border-width:4px}}
+</style>
+<figcaption class="trn-title trn-flow-title">Masala Chai</figcaption>
+<ol class="trn-flow">
+<li class="trn-flow-step">
+<div class="trn-flow-box">
+<h3 class="trn-flow-head"><span class="trn-flow-num">[1]</span> <span class="trn-flow-verb">Crush or grind to a powder</span></h3>
+<ul class="trn-flow-chips"><li class="trn-chip">4 green cardamoms</li><li class="trn-chip">2 cloves</li><li class="trn-chip">3g cinnamon</li><li class="trn-chip">2 peppercorns</li></ul>
+</div>
+</li>
+<li class="trn-flow-step">
+<div class="trn-flow-box">
+<h3 class="trn-flow-head"><span class="trn-flow-num">[2]</span> <span class="trn-flow-verb">Boil 3 min in 360ml water until the decoction is dark</span></h3>
+<ul class="trn-flow-chips"><li class="trn-chip">1/2 inch ginger crushed</li><li class="trn-chip">6g black tea</li></ul>
+<p class="trn-flow-refs"><span class="trn-flow-refs-label">from</span> <span class="trn-flow-ref"><span class="trn-flow-ref-num">[1]</span> <span class="trn-flow-ref-verb">Crush or grind to a powder</span></span></p>
+</div>
+</li>
+<li class="trn-flow-step">
+<div class="trn-flow-box">
+<h3 class="trn-flow-head"><span class="trn-flow-num">[3]</span> <span class="trn-flow-verb">Add and bring to a boil</span></h3>
+<ul class="trn-flow-chips"><li class="trn-chip">240ml full-fat milk</li><li class="trn-chip">12g sugar</li></ul>
+<p class="trn-flow-refs"><span class="trn-flow-refs-label">from</span> <span class="trn-flow-ref"><span class="trn-flow-ref-num">[2]</span> <span class="trn-flow-ref-verb">Boil 3 min in 360ml water until the decoction is dark</span></span></p>
+</div>
+</li>
+<li class="trn-flow-step">
+<div class="trn-flow-box">
+<h3 class="trn-flow-head"><span class="trn-flow-num">[4]</span> <span class="trn-flow-verb">Simmer 2 min until dark with a cream layer and no raw milk flavour</span></h3>
+<p class="trn-flow-refs"><span class="trn-flow-refs-label">from</span> <span class="trn-flow-ref"><span class="trn-flow-ref-num">[3]</span> <span class="trn-flow-ref-verb">Add and bring to a boil</span></span></p>
+</div>
+</li>
+<li class="trn-flow-step trn-flow-step-final">
+<div class="trn-flow-box">
+<h3 class="trn-flow-head"><span class="trn-flow-num">[5]</span> <span class="trn-flow-verb">Pull 4-5 times from 1-1.5 ft, then strain into cups and serve</span> <span class="trn-flow-final-badge">final</span></h3>
+<p class="trn-flow-refs"><span class="trn-flow-refs-label">from</span> <span class="trn-flow-ref"><span class="trn-flow-ref-num">[4]</span> <span class="trn-flow-ref-verb">Simmer 2 min until dark with a cream layer and no raw milk flavour</span></span></p>
+</div>
+</li>
+</ol>
+</figure>
+
+</section>
+</div>
+</body>
+</html>

@@ -26,7 +26,14 @@ func RenderFlow(r *Recipe) template.HTML {
 		return ""
 	}
 	var buf bytes.Buffer
-	if err := flowTemplate.Execute(&buf, buildFlow(r)); err != nil {
+	// The shared presentation baseline (presentation.go) travels inside this
+	// fragment, so the fragment renders the same alone as it does inside
+	// RenderDocument's page.
+	err := flowTemplate.Execute(&buf, flowFragment{
+		CSS:      template.CSS(sharedCSS),
+		flowView: buildFlow(r),
+	})
+	if err != nil {
 		// Unreachable: the template is a compile-time constant and the data is
 		// plain strings and ints. Degrade to an empty fragment anyway — this
 		// package never turns a rendering problem into a panic.
@@ -35,6 +42,13 @@ func RenderFlow(r *Recipe) template.HTML {
 	// Safe by construction: every byte of user text in buf was written by
 	// html/template's escaper, the rest is this package's own markup and CSS.
 	return template.HTML(buf.String())
+}
+
+// flowFragment is the data set for the flow template: the shared presentation
+// baseline plus the flow model of one recipe.
+type flowFragment struct {
+	CSS template.CSS
+	flowView
 }
 
 // flowView is the whole data set handed to the flow template.
@@ -108,8 +122,8 @@ func buildFlow(r *Recipe) flowView {
 // a "final" badge, so it stays distinct when printed or re-skinned.
 var flowTemplate = template.Must(template.New("trn.flow").Parse(`<figure class="trn trn-view trn-view-flow">
 <style>
-.trn-view-flow{--trn-fg:#1c1b19;--trn-bg:#fffefb;--trn-line:#cdc7bb;--trn-head:#f2eee4;--trn-mark:#9a6b1f;--trn-muted:#6b655b;--trn-accent:#9a6b1f;--trn-final:#fdf4e0;box-sizing:border-box;max-width:100%;margin:0;padding:.5rem;color:var(--trn-fg);background:var(--trn-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:.95rem;line-height:1.35}
-@media (prefers-color-scheme:dark){.trn-view-flow{--trn-fg:#e9e5dc;--trn-bg:#151412;--trn-line:#3b3833;--trn-head:#24211c;--trn-mark:#e0b463;--trn-muted:#a49c8e;--trn-accent:#e0b463;--trn-final:#241f14}}
+{{.CSS}}.trn-view-flow{--trn-accent:#9a6b1f;--trn-final:#fdf4e0;margin:0;padding:.5rem}
+@media (prefers-color-scheme:dark){.trn-view-flow{--trn-accent:#e0b463;--trn-final:#241f14}}
 .trn-flow-title{margin:0 0 .6rem;font-weight:600}
 .trn-flow{list-style:none;margin:0;padding:0}
 .trn-flow-step{position:relative;margin:0 0 1.15rem;padding-left:1.9rem}
@@ -134,7 +148,7 @@ var flowTemplate = template.Must(template.New("trn.flow").Parse(`<figure class="
 .trn-flow-ref-unknown .trn-flow-ref-num{color:var(--trn-muted);font-weight:500}
 .trn-flow-step-final .trn-flow-box{border:2px solid var(--trn-accent);background:var(--trn-final)}
 .trn-flow-final-badge{margin-left:.35rem;padding:0 .3rem;border:1px solid var(--trn-accent);border-radius:.25rem;color:var(--trn-accent);font-size:.7em;font-weight:600;letter-spacing:.06em;text-transform:uppercase;vertical-align:.15em}
-@media print{.trn-view-flow{--trn-fg:#000;--trn-bg:#fff;--trn-line:#666;--trn-head:#fff;--trn-mark:#000;--trn-muted:#333;--trn-accent:#000;--trn-final:#fff;color:#000;background:#fff;padding:0;font-size:10pt}.trn-flow-step{break-inside:avoid;page-break-inside:avoid}.trn-flow-step-final .trn-flow-box{border-style:double;border-width:4px}}
+@media print{.trn-view-flow{--trn-accent:#000;--trn-final:#fff;padding:0}.trn-flow-step{break-inside:avoid;page-break-inside:avoid}.trn-flow-step-final .trn-flow-box{border-style:double;border-width:4px}}
 </style>
 {{if .Title}}<figcaption class="trn-title trn-flow-title">{{.Title}}</figcaption>
 {{end}}<ol class="trn-flow">
