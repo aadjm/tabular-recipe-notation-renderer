@@ -69,8 +69,9 @@ func ConvergenceWarnings(r *Recipe) []Warning {
 //
 // A reference resolves to the first appearance of its step number, matching the
 // parser's rule for duplicated numbers. References to steps that do not exist
-// are ignored here — Parse reports them as W2. Reference cycles (possible only
-// alongside a W3) terminate because each index is visited at most once.
+// are ignored here — Parse reports them as W2. References are followed as
+// written, so a forward reference (W3) or a cycle also contributes a reachable
+// step; cycles terminate because each index is visited at most once.
 //
 // Complexity is O(steps × items) per call: documents are tiny, so the obvious
 // graph walk beats anything cleverer.
@@ -82,12 +83,7 @@ func ancestorSteps(r *Recipe, target int) []bool {
 	if target < 0 || target >= len(r.Steps) {
 		return reach
 	}
-	firstAt := make(map[int]int, len(r.Steps))
-	for i, step := range r.Steps {
-		if _, seen := firstAt[step.Number]; !seen {
-			firstAt[step.Number] = i
-		}
-	}
+	firstAt := firstByNumber(r)
 
 	reach[target] = true
 	stack := []int{target}
@@ -107,6 +103,20 @@ func ancestorSteps(r *Recipe, target int) []bool {
 		}
 	}
 	return reach
+}
+
+// firstByNumber maps every step number to the index of its first appearance,
+// which is how references resolve when numbers are duplicated (W1). Shared by
+// the reachability walk, the W4 check and the matrix renderer so all three
+// agree on which step a reference means.
+func firstByNumber(r *Recipe) map[int]int {
+	first := make(map[int]int, len(r.Steps))
+	for i, step := range r.Steps {
+		if _, seen := first[step.Number]; !seen {
+			first[step.Number] = i
+		}
+	}
+	return first
 }
 
 // anyTrue reports whether any of the given indices is set in flags.

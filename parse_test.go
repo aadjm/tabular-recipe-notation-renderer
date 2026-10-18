@@ -544,5 +544,34 @@ func FuzzParse(f *testing.F) {
 				t.Fatalf("bad render warning %#v", w)
 			}
 		}
+
+		// The matrix renderer takes the same arbitrary input: it must never
+		// panic, must escape user text, and must keep one row per distinct
+		// ingredient and one spanning row per ingredient-free step.
+		fragment := string(RenderTable(got))
+		if strings.Contains(fragment, "<script") {
+			t.Fatalf("rendered matrix contains an unescaped script tag")
+		}
+		if gotRows := strings.Count(fragment, `<tr class="trn-row">`); gotRows != len(seen) {
+			t.Fatalf("%d matrix rows for %d distinct ingredients", gotRows, len(seen))
+		}
+		wantActions := 0
+		for _, s := range got.Steps {
+			adds := false
+			for _, item := range s.Items {
+				if item.Ref == 0 {
+					adds = true
+				}
+			}
+			if !adds {
+				wantActions++
+			}
+		}
+		if gotActions := strings.Count(fragment, `<tr class="trn-action">`); gotActions != wantActions {
+			t.Fatalf("%d action rows for %d ingredient-free steps", gotActions, wantActions)
+		}
+		if RenderTable(nil) != "" {
+			t.Fatal("RenderTable(nil) is not the empty fragment")
+		}
 	})
 }

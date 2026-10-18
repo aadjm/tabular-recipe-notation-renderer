@@ -21,7 +21,8 @@ filesystem access beyond the input, no state, no JavaScript in its output.
 | Parser + AST (`Parse`) | implemented — `parse.go`, `types.go` |
 | Warnings W1, W2, W3, W5, W6, W7 | implemented (parse time) |
 | Warning W4 (ingredient never reaches the final step) | implemented (render time) — `ConvergenceWarnings`, `warnings.go` |
-| Renderers (`RenderTable`, `RenderFlow`) | not yet implemented |
+| Matrix view (`RenderTable`) | implemented — `render_table.go` |
+| Flow view (`RenderFlow`) | not yet implemented |
 | CLI (`cmd/trn-render`) | not yet implemented |
 
 ## The dialect
@@ -90,6 +91,7 @@ type Warning struct {
 
 func Parse(input string) (*Recipe, []Warning)
 func ConvergenceWarnings(r *Recipe) []Warning
+func RenderTable(r *Recipe) template.HTML
 ```
 
 `Parse` never returns an error and never panics: malformed documents degrade to
@@ -101,6 +103,17 @@ returns W4 for every ingredient that never reaches the final step, directly or
 transitively. Callers append its result to the parser's warnings (re-sort the
 merged slice if the `W1 … W7` order matters). It and the renderers share
 `ancestorSteps`, the transitive back-reference closure used for matrix cells.
+
+`RenderTable` returns the Cooking-for-Engineers matrix (SPEC-ENGINE §4.1) as a
+self-contained HTML fragment: one row per unique ingredient in first-appearance
+order, one column per step in document order, a cell that shows the step's verb
+where the ingredient is listed, a CSS-flow-marker cell where the ingredient is
+carried in through back-references, an empty cell otherwise, and a spanning
+action row for every step that adds no ingredient. The fragment carries its own
+classed markup (`trn-table`, `trn-cell-direct`, `trn-cell-flow`, `trn-action`, …),
+its own light/dark stylesheet and a print stylesheet; it contains no JavaScript,
+no images and no external resources. `RenderTable(nil)` returns an empty
+fragment, and no input makes it panic or return an error.
 
 ## Warning codes
 
@@ -117,8 +130,9 @@ merged slice if the `W1 … W7` order matters). It and the renderers share
 ## Tests
 
 ```console
-$ go test ./...          # fixtures, edge cases, invariants
+$ go test ./...          # fixtures, edge cases, invariants, goldens
 $ go test -race ./...
+$ go test ./... -update  # rewrite testdata/*.table.html goldens
 $ go test -run '^$' -fuzz '^FuzzParse$' -fuzztime 30s
 ```
 
@@ -127,6 +141,16 @@ W1 … W7, plus the reachability cases behind W4 (transitive chains, stranded
 ingredients, repeated ingredients, dangling refs, cycles, duplicated step
 numbers). `parse_test.go` covers the dialect itself.
 
+`render_test.go` reads the rendered matrix back out of the HTML and counts
+(acceptance criterion E-A2): step columns, ingredient rows, action rows, flow
+markers, and the convergence of every ingredient into the final column. It also
+re-derives the expected cells with an independent walk for every fixture, checks
+that the matrix agrees with `ConvergenceWarnings`, and pushes markup, quotes and
+Unicode through every text field to prove user bytes come back intact and never
+become live markup. `golden_test.go` compares `testdata/<name>.trn.md` with the
+committed `testdata/<name>.table.html`; the `.table` suffix leaves
+`<name>.flow.html` free for the flow view.
+
 `testdata/chai.trn.md` and `testdata/guacamole.trn.md` are the canonical examples
 from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
 [TheSonOfThomp/recipe-parser](https://github.com/TheSonOfThomp/recipe-parser)
@@ -134,7 +158,7 @@ verbatim, trailing spaces included. `testdata/grocy-1.trn.md` … `grocy-5.trn.m
 are the five real recipes carried by the `trn` userfield on the live Grocy
 instance, fetched read-only — recipe text only, never the API key.
 
-## Usage (once the renderers land)
+## Usage (once the CLI lands)
 
 ```console
 $ trn-render recipe.trn.md --standalone > recipe.html
@@ -180,6 +204,44 @@ covered by a test in `parse_test.go`.
 10. **Only ASCII trailing whitespace is ignored** per line (space, tab, `\r`,
     `\v`, `\f`), so CRLF input parses identically to LF. Nothing inside an item
     is normalised.
+
+The renderer's choices where §4 leaves room, each covered in `render_test.go`:
+
+11. **Matrix cells** follow §4.1 literally: a cell shows the step's verb where
+    the ingredient is listed in that step; it shows a flow marker where the
+    ingredient is not listed but reaches the step through back-references
+    (transitively); it is empty otherwise. Reachability follows references as
+    written, so a forward reference (W3) also carries an ingredient into an
+    earlier column; cycles terminate because each step is visited once.
+12. **The flow marker is a classed, empty span.** The glyph is CSS-generated
+    (`content:"→"` on `.trn-mark::before`) and hidden from assistive technology
+    with `aria-hidden`, so the cell contains no text at all — the row and column
+    headers already say which ingredient and step it belongs to. Any styled
+    arrow/dot satisfies §4.1; this one needs no extra markup and survives
+    re-skinning through the class name.
+13. **A step that adds no ingredient text becomes a spanning action row** — every
+    item is a reference, and a step with no items at all qualifies vacuously. The
+    row sits after the ingredient rows in document order, spans every column
+    (`colspan` = ingredient column + all steps) and shows `[n] verb` followed by
+    the steps it references (`[n] verb`, or `#n` when the reference is dangling).
+    Every step still gets a column, because §4.1 defines columns as the steps in
+    document order: chai therefore has 5 columns and steps 4 and 5 as action
+    rows.
+14. **E-A2's "11 ingredient rows" does not follow from §4.1.** The chai document
+    has 8 unique ingredients — 11 is the item count of steps 1–4 with the three
+    references counted as items. §4.1 ("rows: unique ingredients") is normative,
+    so the matrix has 8 rows; `TestEA2ChaiMatrix` asserts the semantic numbers
+    (8 rows × 5 columns, 26 flow markers, 2 action rows, every ingredient
+    converging on the final column) instead of three invented rows. Recorded
+    here rather than silently resolved.
+15. **Degenerate input renders, never errors.** `RenderTable(nil)` returns an
+    empty fragment; a document without steps renders the table shell (header row
+    only); an empty title omits the `<caption>`; an empty verb (W7) leaves a
+    direct cell whose verb span is empty but whose class still marks it as
+    direct.
+16. **Goldens are `testdata/<name>.table.html`**, rebuilt with
+    `go test ./... -update`, so the flow view can own `<name>.flow.html` over the
+    same fixtures. The golden covers the whole fragment, stylesheet included.
 
 ## License
 
