@@ -35,7 +35,8 @@ the LAN at `GROCY_URL` (currently `http://192.168.1.196:9283`), not through the
 `*.samizdat.site` SSO hostname, which rejects API-key requests.
 
 ```
-GET $GROCY_URL/api/userfields/recipes/<id>     (header: GROCY-API-KEY: <key>)
+GET $GROCY_URL/api/userfields/recipes/<id>
+  with the request header GROCY-API-KEY set from GROCY_API_KEY in /root/.env
 ```
 
 Write the returned `trn` string out with no added bytes, then regenerate the
