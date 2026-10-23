@@ -36,3 +36,11 @@ type Warning struct {
 	Code string // W1..W7
 	Msg  string
 }
+
+// RenderOptions configures view selection and title visibility for rendering.
+// By default (zero value), View defaults to ViewBoth and ShowTitle is false
+// (titles are omitted/invisible unless explicitly enabled).
+type RenderOptions struct {
+	View      string // ViewTable ("table"), ViewFlow ("flow"), or ViewBoth ("both")
+	ShowTitle bool   // when true, render the recipe title in the output
+}

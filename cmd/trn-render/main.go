@@ -53,7 +53,8 @@ Renders a TRN (Tabular Recipe Notation) document as HTML.
 
   --view table|flow|both   which view(s) to write (default both)
   --standalone             write a complete <!doctype html>...</html> page
-  --title <text>           override the document title
+  --show-title             render the visible title (default hidden)
+  --title <text>           override the document title (and show it)
   -h, --help               print this help
 
 A file argument of "-" (or no argument) reads standard input. Flags may precede
@@ -77,7 +78,8 @@ func main() {
 // options is one parsed command line.
 type options struct {
 	view       string // viewTable, viewFlow or viewBoth
-	standalone bool   // write RenderDocument instead of the fragment(s)
+	standalone bool   // write RenderDocumentWithOptions instead of the fragment(s)
+	showTitle  bool   // whether to render the visible title (default false)
 	title      string // override Recipe.Title; empty means "keep the parsed title"
 	file       string // input path; "" or "-" means stdin
 }
@@ -126,10 +128,14 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // page rendered here is the one the browser verification covered. The fragment
 // output is the same function pair the site calls, joined as §5 describes.
 func render(r *trn.Recipe, o options) string {
-	if o.standalone {
-		return string(trn.RenderDocumentView(r, o.view))
+	opts := trn.RenderOptions{
+		View:      o.view,
+		ShowTitle: o.showTitle,
 	}
-	return string(trn.RenderView(r, o.view))
+	if o.standalone {
+		return string(trn.RenderDocumentWithOptions(r, opts))
+	}
+	return string(trn.RenderWithOptions(r, opts))
 }
 
 // readInput reads the whole input, whether it comes from a file or stdin.
@@ -193,6 +199,11 @@ func parseArgs(args []string) (options, error) {
 				return o, fmt.Errorf("flag %q takes no value", arg)
 			}
 			o.standalone = true
+		case "show-title":
+			if attached {
+				return o, fmt.Errorf("flag %q takes no value", arg)
+			}
+			o.showTitle = true
 		case "view", "title":
 			if !attached {
 				if i+1 >= len(args) {
@@ -213,9 +224,10 @@ func parseArgs(args []string) (options, error) {
 					return o, errors.New("--title needs a non-empty value")
 				}
 				o.title = value
+				o.showTitle = true
 			}
 		default:
-			return o, fmt.Errorf("unknown flag %q (want --view, --standalone, --title or --help)", arg)
+			return o, fmt.Errorf("unknown flag %q (want --view, --standalone, --show-title, --title or --help)", arg)
 		}
 	}
 

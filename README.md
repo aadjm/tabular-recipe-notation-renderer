@@ -74,12 +74,14 @@ Sample inputs and their corresponding rendered HTML outputs are separated under 
 trn-render [flags] [file.md | -]
   --view table|flow|both   which view(s) to write (default both)
   --standalone             write a complete <!doctype html>...</html> page
-  --title <text>           override the document title
+  --show-title             render the visible title (default hidden)
+  --title <text>           override the document title (and show it)
   -h, --help               print usage
 ```
 
 - Pass a file path, `-`, or no positional argument to read from standard input.
 - Use `--view table`, `--view flow`, or `--view both` (with or without `--standalone`) to toggle and render each view separately or together.
+- Titles are hidden by default. Pass `--show-title` to display the recipe's title, or `--title <text>` to override and display a custom title.
 
 ```sh
 # Render a standalone HTML page with only the recipe summary table
@@ -128,17 +130,22 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", w.Code, w.Msg)
 	}
 
-	// Render individual HTML fragments:
-	tableHTML := trn.RenderTable(recipe)             // or trn.RenderView(recipe, trn.ViewTable)
-	flowHTML := trn.RenderFlow(recipe)               // or trn.RenderView(recipe, trn.ViewFlow)
+	// Render individual HTML fragments (title hidden by default):
+	tableHTML := trn.RenderTable(recipe)
+	flowHTML := trn.RenderFlow(recipe)
 
-	// Render standalone HTML documents (toggleable per view):
-	tableDoc := trn.RenderDocumentView(recipe, trn.ViewTable)
-	flowDoc := trn.RenderDocumentView(recipe, trn.ViewFlow)
-	bothDoc := trn.RenderDocument(recipe)
+	// Toggle view and title visibility via RenderOptions:
+	titledTable := trn.RenderWithOptions(recipe, trn.RenderOptions{
+		View:      trn.ViewTable,
+		ShowTitle: true,
+	})
+	tableDoc := trn.RenderDocumentWithOptions(recipe, trn.RenderOptions{
+		View:      trn.ViewTable,
+		ShowTitle: false, // default
+	})
 
 	fmt.Println(tableHTML)
-	_, _, _, _ = flowHTML, tableDoc, flowDoc, bothDoc
+	_, _, _ = flowHTML, titledTable, tableDoc
 }
 ```
 
@@ -150,6 +157,11 @@ const (
 	ViewFlow  = "flow"
 	ViewBoth  = "both"
 )
+
+type RenderOptions struct {
+	View      string // ViewTable ("table"), ViewFlow ("flow"), or ViewBoth ("both")
+	ShowTitle bool   // when true, render the visible recipe title (default false)
+}
 
 type Recipe struct {
 	Title string
@@ -175,10 +187,14 @@ type Warning struct {
 func Parse(input string) (*Recipe, []Warning)
 func ConvergenceWarnings(r *Recipe) []Warning
 func RenderTable(r *Recipe) template.HTML
+func RenderTableWithTitle(r *Recipe, showTitle bool) template.HTML
 func RenderFlow(r *Recipe) template.HTML
+func RenderFlowWithTitle(r *Recipe, showTitle bool) template.HTML
 func RenderView(r *Recipe, view string) template.HTML
+func RenderWithOptions(r *Recipe, opts RenderOptions) template.HTML
 func RenderDocument(r *Recipe) template.HTML
 func RenderDocumentView(r *Recipe, view string) template.HTML
+func RenderDocumentWithOptions(r *Recipe, opts RenderOptions) template.HTML
 ```
 
 ## Warning Codes

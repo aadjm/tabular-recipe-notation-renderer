@@ -169,8 +169,8 @@ func TestStandaloneTitleOverride(t *testing.T) {
 	// nothing of its own to the page.
 	r := parseFixture(t, chaiFixture)
 	r.Title = title
-	if got.stdout != string(trn.RenderDocument(r)) {
-		t.Error("--title output differs from RenderDocument with Recipe.Title set")
+	if got.stdout != string(trn.RenderDocumentWithOptions(r, trn.RenderOptions{View: trn.ViewBoth, ShowTitle: true})) {
+		t.Error("--title output differs from RenderDocumentWithOptions with ShowTitle: true")
 	}
 }
 

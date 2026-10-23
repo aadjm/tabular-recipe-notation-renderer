@@ -235,8 +235,12 @@ func TestEA2ChaiMatrix(t *testing.T) {
 	tbl := parseTable(t, string(RenderTable(r)))
 	checkGridShape(t, tbl)
 
-	if tbl.caption != "Masala Chai" {
-		t.Errorf("caption = %q, want %q", tbl.caption, "Masala Chai")
+	if tbl.caption != "" {
+		t.Errorf("default caption = %q, want empty (title hidden by default)", tbl.caption)
+	}
+	titledTbl := parseTable(t, string(RenderTableWithTitle(r, true)))
+	if titledTbl.caption != "Masala Chai" {
+		t.Errorf("titled caption = %q, want %q", titledTbl.caption, "Masala Chai")
 	}
 
 	ingredients, actions := ingredientRows(tbl)
@@ -563,7 +567,7 @@ func TestRenderTableEscaping(t *testing.T) {
 			{Number: 3, Verb: verb2, Items: []Item{{Ref: 2}, {Text: `<style>p{}</style>`}}},
 		},
 	}
-	out := string(RenderTable(r))
+	out := string(RenderTableWithTitle(r, true))
 	for _, bad := range []string{"<script", "<b>", "<i>", "<img", "<svg", "<style"} {
 		if strings.Contains(out, bad) {
 			t.Errorf("rendered HTML contains live markup %q from user text", bad)
@@ -661,8 +665,12 @@ func TestRenderTableNilAndEmpty(t *testing.T) {
 			if strings.Count(out, "</table>") != 1 {
 				t.Errorf("expected exactly one table, got %d", strings.Count(out, "</table>"))
 			}
-			if strings.Contains(out, "<caption") != (r.Title != "") {
-				t.Errorf("caption presence = %v, want %v (title %q)", strings.Contains(out, "<caption"), r.Title != "", r.Title)
+			if strings.Contains(out, "<caption") {
+				t.Errorf("default RenderTable should hide caption, got:\n%s", out)
+			}
+			outTitled := string(RenderTableWithTitle(r, true))
+			if strings.Contains(outTitled, "<caption") != (r.Title != "") {
+				t.Errorf("titled caption presence = %v, want %v (title %q)", strings.Contains(outTitled, "<caption"), r.Title != "", r.Title)
 			}
 		})
 	}

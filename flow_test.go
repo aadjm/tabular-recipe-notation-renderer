@@ -159,9 +159,14 @@ func arrowSources(box parsedFlowBox) []int {
 // numbers, verbs, the chips each step introduces, and the connector each step
 // draws from the one before it — including the box position it points at.
 func TestFlowChaiBoxes(t *testing.T) {
-	flow := parseFlow(t, string(RenderFlow(loadRecipe(t, "chai.trn.md"))))
-	if flow.title != "Masala Chai" {
-		t.Errorf("title = %q, want %q", flow.title, "Masala Chai")
+	r := loadRecipe(t, "chai.trn.md")
+	flow := parseFlow(t, string(RenderFlow(r)))
+	if flow.title != "" {
+		t.Errorf("default title = %q, want empty (hidden by default)", flow.title)
+	}
+	titledFlow := parseFlow(t, string(RenderFlowWithTitle(r, true)))
+	if titledFlow.title != "Masala Chai" {
+		t.Errorf("titled flow title = %q, want %q", titledFlow.title, "Masala Chai")
 	}
 	want := []struct {
 		num, verb string
@@ -570,8 +575,12 @@ func TestRenderFlowNilAndEmpty(t *testing.T) {
 		t.Error("titleless recipe rendered a figcaption")
 	}
 	flow := parseFlow(t, string(RenderFlow(&Recipe{Title: "Only a title"})))
-	if flow.title != "Only a title" || len(flow.boxes) != 0 {
-		t.Errorf("title-only recipe = %+v, want the title and no boxes", flow)
+	if flow.title != "" || len(flow.boxes) != 0 {
+		t.Errorf("default title-only recipe = %+v, want hidden title and no boxes", flow)
+	}
+	titledFlow := parseFlow(t, string(RenderFlowWithTitle(&Recipe{Title: "Only a title"}, true)))
+	if titledFlow.title != "Only a title" || len(titledFlow.boxes) != 0 {
+		t.Errorf("titled title-only recipe = %+v, want the title and no boxes", titledFlow)
 	}
 }
 
@@ -590,7 +599,7 @@ func TestRenderFlowEscaping(t *testing.T) {
 			{Number: 2, Verb: verb, Items: []Item{{Ref: 1}, {Text: ingredient}}},
 		},
 	}
-	fragment := string(RenderFlow(r))
+	fragment := string(RenderFlowWithTitle(r, true))
 	// User text legitimately keeps sequences like "onerror=" — it is inert as
 	// escaped text — so only real and tag-shaped markup is checked here.
 	for _, raw := range []string{"<script>", "<b>well</b>", "<img ", "<i>referenced</i>"} {

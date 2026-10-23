@@ -65,14 +65,15 @@ func TestDocumentStructure(t *testing.T) {
 		if !strings.Contains(doc, "<title>"+htmlText(t, r.Title)+"</title>") {
 			t.Errorf("%s: <title> does not carry the recipe title", name)
 		}
-		if n := strings.Count(doc, "<h1"); n != 1 {
-			t.Errorf("%s: h1 count = %d, want exactly 1", name, n)
+		if n := strings.Count(doc, "<h1"); n != 0 {
+			t.Errorf("%s: default h1 count = %d, want 0 (title hidden by default)", name, n)
 		}
 		if n := strings.Count(doc, "<h2"); n != 0 {
 			t.Errorf("%s: h2 count = %d, want 0 (no section headers)", name, n)
 		}
-		if n := strings.Count(doc, "<h1"); n > 0 && !strings.Contains(doc, `<h1 class="trn-doc-title">`+htmlText(t, r.Title)+`</h1>`) {
-			t.Errorf("%s: page heading does not carry the recipe title", name)
+		docTitled := string(RenderDocumentWithOptions(r, RenderOptions{View: ViewBoth, ShowTitle: true}))
+		if !strings.Contains(docTitled, `<h1 class="trn-doc-title">`+htmlText(t, r.Title)+`</h1>`) {
+			t.Errorf("%s: page heading with ShowTitle=true does not carry the recipe title", name)
 		}
 
 		// Both views, in order, each in its own section.
@@ -115,12 +116,17 @@ func TestDocumentStructure(t *testing.T) {
 // TestDocumentTitleFallback covers the empty-title case (W6): a generic title
 // instead of an empty heading or an empty <title> element.
 func TestDocumentTitleFallback(t *testing.T) {
-	doc := string(RenderDocument(&Recipe{Steps: []Step{{Number: 1, Verb: "Mash", Items: []Item{{Text: "1 avocado"}}}}}))
+	r := &Recipe{Steps: []Step{{Number: 1, Verb: "Mash", Items: []Item{{Text: "1 avocado"}}}}}
+	doc := string(RenderDocument(r))
 	if !strings.Contains(doc, "<title>"+defaultDocTitle+"</title>") {
 		t.Errorf("empty recipe title did not fall back to %q", defaultDocTitle)
 	}
-	if !strings.Contains(doc, `<h1 class="trn-doc-title">`+defaultDocTitle+`</h1>`) {
-		t.Errorf("empty recipe title did not fall back in the page heading")
+	if strings.Contains(doc, `<h1 class="trn-doc-title">`) {
+		t.Errorf("default document rendered an h1 when ShowTitle is false")
+	}
+	docTitled := string(RenderDocumentWithOptions(r, RenderOptions{View: ViewBoth, ShowTitle: true}))
+	if !strings.Contains(docTitled, `<h1 class="trn-doc-title">`+defaultDocTitle+`</h1>`) {
+		t.Errorf("empty recipe title did not fall back in the page heading when ShowTitle=true")
 	}
 }
 

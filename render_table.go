@@ -31,12 +31,25 @@ import (
 //
 // RenderTable never panics and never errors: a nil recipe renders nothing, a
 // document without steps renders an empty table.
+// RenderTable renders a recipe as the Cooking-for-Engineers recipe summary
+// table with the title hidden by default. Use RenderTableWithTitle(r, true)
+// or RenderWithOptions to include a visible <caption> title.
 func RenderTable(r *Recipe) template.HTML {
+	return RenderTableWithTitle(r, false)
+}
+
+// RenderTableWithTitle renders the recipe summary table, optionally including
+// the recipe title as a <caption> when showTitle is true.
+func RenderTableWithTitle(r *Recipe, showTitle bool) template.HTML {
 	if r == nil {
 		return ""
 	}
+	m := buildMatrix(r)
+	if !showTitle {
+		m.Title = ""
+	}
 	var buf bytes.Buffer
-	if err := tableTemplate.Execute(&buf, buildMatrix(r)); err != nil {
+	if err := tableTemplate.Execute(&buf, m); err != nil {
 		return ""
 	}
 	return template.HTML(buf.String())

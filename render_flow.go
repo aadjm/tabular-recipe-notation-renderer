@@ -21,12 +21,25 @@ import (
 //
 // RenderFlow never panics and never errors: a nil recipe renders nothing, a
 // document without steps renders the empty list.
+// RenderFlow renders a recipe as the flow view with the title hidden by default.
+// Use RenderFlowWithTitle(r, true) or RenderWithOptions to include a visible
+// <figcaption> title.
 func RenderFlow(r *Recipe) template.HTML {
+	return RenderFlowWithTitle(r, false)
+}
+
+// RenderFlowWithTitle renders the flow view, optionally including the recipe
+// title as a <figcaption> when showTitle is true.
+func RenderFlowWithTitle(r *Recipe, showTitle bool) template.HTML {
 	if r == nil {
 		return ""
 	}
+	view := buildFlow(r)
+	if !showTitle {
+		view.Title = ""
+	}
 	var buf bytes.Buffer
-	if err := flowTemplate.Execute(&buf, buildFlow(r)); err != nil {
+	if err := flowTemplate.Execute(&buf, view); err != nil {
 		// Unreachable: the template is a compile-time constant and the data is
 		// plain strings and ints. Degrade to an empty fragment rather than
 		// panic.
