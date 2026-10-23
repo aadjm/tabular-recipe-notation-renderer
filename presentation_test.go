@@ -23,11 +23,10 @@ func markedShared(t *testing.T, html string) string {
 }
 
 // TestSharedStylesheetIsSingleSource is the structural half of the presentation
-// layer: the views that still carry styling (the flow view and the standalone
-// document) embed the same baseline, byte for byte, and that baseline is the
-// sharedCSS constant rather than a copy that can drift. The matrix view is pure
-// HTML per SPEC-ENGINE §10 — it carries no stylesheet at all, and the test
-// asserts that instead.
+// layer: the one thing the engine still styles — the standalone document, whose
+// page chrome needs the palette to mean anything — embeds the baseline from
+// sharedCSS byte for byte, and neither view fragment carries any styling at all.
+// Both views are pure HTML per SPEC-ENGINE §4.2/§4.3.
 func TestSharedStylesheetIsSingleSource(t *testing.T) {
 	want := markedShared(t, sharedCSS)
 	if rest := strings.TrimPrefix(sharedCSS, want); rest != "\n" {
@@ -36,26 +35,33 @@ func TestSharedStylesheetIsSingleSource(t *testing.T) {
 
 	for _, name := range fixtureNames(t) {
 		r := loadRecipe(t, name)
-		for view, fragment := range map[string]string{
-			"flow": string(RenderFlow(r)),
-			"doc":  string(RenderDocument(r)),
-		} {
-			if got := markedShared(t, fragment); got != want {
-				t.Errorf("%s/%s: embedded presentation baseline differs from sharedCSS", name, view)
-			}
+		doc := string(RenderDocument(r))
+		if got := markedShared(t, doc); got != want {
+			t.Errorf("%s/doc: embedded presentation baseline differs from sharedCSS", name)
 		}
-		if table := string(RenderTable(r)); strings.Contains(table, "<style") || strings.Contains(table, "--trn-fg:") {
-			t.Errorf("%s/table: the matrix fragment carries styling; the engine emits structure only (SPEC-ENGINE §10)", name)
+		if n := strings.Count(doc, "/* trn:shared:start */"); n != 1 {
+			t.Errorf("%s/doc: %d presentation baselines, want 1", name, n)
+		}
+		for view, fragment := range map[string]string{
+			"table": string(RenderTable(r)),
+			"flow":  string(RenderFlow(r)),
+		} {
+			if strings.Contains(fragment, "<style") || strings.Contains(fragment, "--trn-") {
+				t.Errorf("%s/%s: the fragment carries styling; the engine emits structure only (SPEC-ENGINE §4.3)", name, view)
+			}
 		}
 	}
 
-	// The baseline must be the only place the palette is declared: a view that
-	// re-declares --trn-fg would silently win over the shared block.
-	if n := strings.Count(string(RenderFlow(&Recipe{})), "--trn-fg:"); n != 3 {
-		t.Errorf("flow --trn-fg declarations = %d, want 3 (one per mode)", n)
+	// The baseline must be the only place the palette is declared: neither view
+	// may re-declare --trn-fg, and the page must carry it once per mode.
+	if n := strings.Count(string(RenderFlow(&Recipe{})), "--trn-fg:"); n != 0 {
+		t.Errorf("flow --trn-fg declarations = %d, want 0 (pure HTML)", n)
 	}
 	if n := strings.Count(string(RenderTable(&Recipe{})), "--trn-fg:"); n != 0 {
 		t.Errorf("table --trn-fg declarations = %d, want 0 (pure HTML)", n)
+	}
+	if n := strings.Count(string(RenderDocument(&Recipe{})), "--trn-fg:"); n != 3 {
+		t.Errorf("document --trn-fg declarations = %d, want 3 (one per mode)", n)
 	}
 }
 
@@ -189,13 +195,13 @@ func TestDocumentStructure(t *testing.T) {
 			`<table class="trn-table">`,
 			`<th scope="col"`,
 			`<th scope="row"`,
-			`<figure class="trn trn-view trn-view-flow">`,
+			`<figure class="trn-flow">`,
 		} {
 			if !strings.Contains(doc, want) {
 				t.Errorf("%s: document is missing %q", name, want)
 			}
 		}
-		if strings.Index(doc, `<table class="trn-table">`) > strings.Index(doc, "trn-view-flow") {
+		if strings.Index(doc, `<table class="trn-table">`) > strings.Index(doc, `class="trn-flow"`) {
 			t.Errorf("%s: the tabular view must come first (it is the default)", name)
 		}
 
@@ -330,7 +336,7 @@ func TestGoldenDocument(t *testing.T) {
 // text pairs must clear 4.5:1 (1.4.3) and the CSS-generated glyphs must clear
 // 3:1 (1.4.11).
 func TestPaletteContrast(t *testing.T) {
-	frag := string(RenderFlow(&Recipe{}))
+	frag := string(RenderDocument(&Recipe{}))
 	lines := strings.Split(markedShared(t, frag), "\n")
 	blocks := map[string]string{}
 	for _, line := range lines {

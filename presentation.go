@@ -6,9 +6,9 @@ import (
 )
 
 // This file is the shared presentation layer of SPEC-ENGINE §4.3: the palette,
-// the system font stack and the print baseline both views build on, the
-// CSS-only view switcher, and the standalone document the CLI's --standalone
-// wraps around them.
+// the system font stack and the print baseline the standalone document builds
+// on, the CSS-only view switcher, and the document the CLI's --standalone
+// wraps around the two fragments.
 //
 // The constraints are structural, not stylistic, and everything here keeps
 // them:
@@ -25,10 +25,10 @@ import (
 //     hidden, the tabular view is forced visible and the table header repeats on
 //     every printed page.
 //
-// Each view fragment stays self-contained — it embeds this baseline itself — so
-// a fragment used alone renders exactly like it does inside the document. The
-// duplication is at the output level; the source of the baseline is this file,
-// and sharedCSS is the only copy.
+// The two view fragments are pure HTML and carry none of this: the baseline
+// lives only in the standalone page, composed with the page chrome, so a
+// fragment embedded by the site cannot smuggle styling into it. The source of
+// the baseline is this file and sharedCSS is the only copy.
 
 // defaultLang is the lang attribute of the standalone document. The dialect
 // carries no language information of its own, the site owns its own <html>
@@ -43,9 +43,10 @@ const defaultLang = "en"
 const defaultDocTitle = "Recipe"
 
 // sharedCSS is the presentation baseline: palette, system font stack, dark mode
-// and the print reset. Both view templates embed it verbatim, and
-// TestSharedStylesheetIsSingleSource compares the two embeddings, so a re-skin
-// changes this one constant.
+// and the print reset. The standalone page embeds it verbatim (composed with
+// documentCSS), and TestSharedStylesheetIsSingleSource checks both that the page
+// carries exactly this block and that neither view fragment carries any, so a
+// re-skin changes this one constant.
 //
 // Every foreground/background pair the views use is checked by
 // TestPaletteContrast, which reads the hex values back out of this block:
@@ -81,7 +82,12 @@ func RenderDocument(r *Recipe) template.HTML {
 	data := documentView{
 		Lang:  defaultLang,
 		Title: defaultDocTitle,
-		CSS:   template.CSS(documentCSS),
+		// The page is the only thing in the engine that still carries a
+		// stylesheet, and the chrome rules below need the shared palette
+		// custom properties to mean anything — so the baseline is composed in
+		// here instead of riding along inside a view fragment (both views are
+		// pure HTML now, SPEC-ENGINE §4.3).
+		CSS:   template.CSS(sharedCSS + documentCSS),
 		Table: RenderTable(r),
 		Flow:  RenderFlow(r),
 	}
@@ -111,10 +117,11 @@ type documentView struct {
 }
 
 // documentCSS styles the page chrome only — title, switcher, panels, and what
-// print does with them. The views keep their own stylesheets (sharedCSS plus
-// their own rules), so a fragment is never dependent on this file and this file
-// adds no colour of its own: every value comes from the shared custom
-// properties.
+// print does with them. It is composed after sharedCSS in the same <style>
+// element, so the palette custom properties it reads are declared once, by the
+// baseline, and every colour in the page comes from there. The view fragments
+// carry no styling at all: this file is the only place the engine still emits
+// CSS, and it exists for `--standalone` output only.
 //
 // The switcher is a radio group, not a checkbox or :target pair: two views are
 // mutually exclusive, and a radio group already means exactly that — one

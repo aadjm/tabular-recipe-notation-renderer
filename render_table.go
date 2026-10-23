@@ -87,9 +87,9 @@ type matrixAction struct {
 // Known is false for a reference to a step that does not exist (already
 // reported as W2); such a reference is shown by number only.
 //
-// Both renderers show references — the matrix on its action rows, the flow view
-// on every box — so the type lives here under a view-neutral name rather than
-// being duplicated per view.
+// The matrix shows these on its action rows; the flow view builds its own
+// connector records (flowArrow) because a connector also needs the position of
+// the box it points at.
 type stepRef struct {
 	Number int
 	Verb   string

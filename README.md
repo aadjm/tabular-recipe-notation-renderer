@@ -140,16 +140,16 @@ Structural details worth knowing when reading the markup:
   sitting between two rows a step acts on is absorbed by that step's span. The
   ingredient is reported as W4 either way.
 
-`RenderFlow` returns the flow view (SPEC-ENGINE §4.2) as a self-contained
-fragment of the same kind: one box per step in document order, numbered, with
-the verb as the box header; the ingredients a step introduces as chips; the
-steps a box draws on as a CSS arrow naming each source (`← [1] Crush or grind to
-a powder`); and a visually distinct box for the final step. The boxes sit on a
-vertical rail whose down-arrows show the sequence. The fragment is classed
-(`trn-flow`, `trn-flow-step`, `trn-flow-step-final`, `trn-chip`, `trn-flow-ref`,
-…), carries its own light/dark and print stylesheets, and contains no
-JavaScript, no images and no external resources. `RenderFlow(nil)` returns an
-empty fragment, and no input makes it panic or return an error.
+`RenderFlow` returns the flow view (SPEC-ENGINE §4.2) as a fragment of the same
+kind: one box per step in document order, numbered, with the verb as the box
+header (`h3`); the ingredients a step introduces as a `<ul>` of chips; one
+connector element per reference, naming the box it comes from and the box it
+points at; and the `trn-flow-final` class on the final step's box. The fragment
+is classed (`trn-flow`, `trn-flow-step`, `trn-flow-box`, `trn-flow-final`,
+`trn-chip`, `trn-flow-arrow`, …) and is pure HTML — no `<style>`, no `<script>`,
+no SVG, no canvas, no image, no external resource — so the site decides how a
+connector is drawn. `RenderFlow(nil)` returns an empty fragment, and no input
+makes it panic or return an error.
 
 Both renderers read the same AST and agree on how a reference resolves
 (`firstByNumber`: the first appearance of the step number), so the views never
@@ -165,21 +165,22 @@ renders an empty page rather than an error.
 
 ## Presentation (SPEC-ENGINE §4.3)
 
-The matrix view is **pure HTML** (§10: structure, not appearance): the table
-carries no `<style>`, no `<script>` and no view toggle. What still ships styling
-inside the engine is the flow view and the standalone page — the flow view's
-boxes/connectors and the page chrome (title, switcher, panels, print rules).
-Those move to the site, or are stripped, under TRN-ENG-5 REDO; the shared
-baseline below is what they use until then.
+**Both views are pure HTML** (§4.3: structure, not appearance): neither fragment
+carries `<style>`, `<script>` or a view toggle. The one place the engine still
+emits CSS is the standalone page `RenderDocument` wraps around them — the page
+chrome (title, switcher, panels, print rules) plus the shared baseline — and
+that exists only so `trn-render --standalone` produces a file that renders; the
+site embeds the two fragments and owns its own stylesheet.
 
-- **One baseline, embedded where styling still lives.** `sharedCSS` in
-  `presentation.go` holds the palette custom properties, the system font stack
+- **One baseline, embedded once.** `sharedCSS` in `presentation.go` holds the
+  palette custom properties, the system font stack
   (`system-ui, -apple-system, "Segoe UI", Roboto, …` — no webfonts, no CDN), the
-  `prefers-color-scheme: dark` variant and the print reset. The flow fragment and
-  the standalone page embed that block verbatim, delimited by
-  `/* trn:shared:start */ … /* trn:shared:end */` so a deployment's stylesheet can
-  be audited, and `TestSharedStylesheetIsSingleSource` proves they carry exactly
-  the same bytes — and that the matrix fragment carries none of it.
+  `prefers-color-scheme: dark` variant and the print reset. Only the standalone
+  page embeds it (composed with the chrome rules into one `<style>` element),
+  delimited by `/* trn:shared:start */ … /* trn:shared:end */` so a deployment's
+  stylesheet can be audited, and `TestSharedStylesheetIsSingleSource` proves the
+  page carries exactly those bytes, exactly once — and that both fragments carry
+  none of it.
 - **Zero JavaScript, CSS-only switcher.** The view switcher is a radio group —
   two `input type=radio` with `label`s, styled by `:checked`, driving the two
   panels through sibling selectors (`#trn-tab-flow:checked ~ .trn-panel-…`).
@@ -189,10 +190,10 @@ baseline below is what they use until then.
   selected one, and no state has to be hidden in a URL fragment. The inputs are
   visually hidden but stay focusable; the focus ring is drawn on the label.
 - **Light and dark** come from CSS custom properties flipped by
-  `prefers-color-scheme`. Every foreground/background pair the flow view uses is
+  `prefers-color-scheme`. Every foreground/background pair the page uses is
   checked by `TestPaletteContrast` against the hex values actually emitted: text
-  pairs clear 4.5:1 and the CSS-generated glyphs clear 3:1, in both schemes and
-  in print.
+  pairs clear 4.5:1 and the marker glyphs clear 3:1, in both schemes and in
+  print.
 - **Print prints the matrix.** The engine's page suppresses the flow panel and
   the tabs in print and forces the matrix panel visible whatever is selected on
   screen. The matrix's own page rules (landscape `@page`, fixed 8pt layout,
@@ -203,11 +204,13 @@ baseline below is what they use until then.
   outline; panels are labelled by their tab (`aria-labelledby`); the matrix is a
   real `<table>` with `<th scope="col">` for step columns and `<th scope="row">`
   for ingredients, so the rowspan cells are announced with both their column and
-  their row; the flow view's CSS glyphs are `aria-hidden`.
+  their row; the flow view's connectors are text (the source step's number and
+  verb), so they are announced too, not just drawn.
 - **Re-skinning.** Every element carries a `trn-*` class (`trn-table`,
   `trn-row`, `trn-step`, `trn-ingredient`, `trn-gap`, `trn-action`, `trn-flow`,
-  `trn-flow-step-final`, `trn-chip`, …), so the embedding site can restyle the
-  views with its own CSS without touching the markup or the engine.
+  `trn-flow-step`, `trn-flow-box`, `trn-flow-final`, `trn-chip`,
+  `trn-flow-arrow`, …), so the embedding site can restyle the views with its own
+  CSS without touching the markup or the engine.
 
 ## Warning codes
 
@@ -247,28 +250,31 @@ through every text field to prove user bytes come back intact and never become
 live markup.
 
 `flow_test.go` does the same for the flow view: it reads the boxes back out of
-the fragment and checks the box order and numbering, each box's verb, the chips
-each step introduces, the "again" notes for re-listed ingredients, and one
-rendered reference per written reference in order — with the boxes and refs
-cross-checked against the AST for every fixture. It also covers the cases the
-fixtures do not: a dangling reference (`#9`), duplicated step numbers, a step
-with no items, a self reference and an empty verb, plus a no-JavaScript /
-no-external-resources scan.
+the fragment and checks the box order, positions and numbering, each box's verb,
+the chips each step introduces (first appearance only), the class on the final
+box, and one connector per written reference in order — with boxes, chips and
+connectors cross-checked against the AST for every fixture, including that every
+connector's `data-from`/`data-to` names a box that is really in the fragment. It
+also covers the cases the fixtures do not: a dangling reference (`#9`),
+duplicated step numbers, a step with no items, a self reference and an empty
+verb, plus the pure-HTML scan (no `<style>`, `<script>`, `<svg>`, `<canvas>`,
+`<img>`, no external resource) that is acceptance criterion 2.
 
 `golden_test.go` compares `testdata/<name>.trn.md` with both committed
 `testdata/<name>.table.html` and `testdata/<name>.flow.html`, so every fixture
 is rendered and compared through both views.
 
-`presentation_test.go` covers §4.3: it locates the shared baseline in every
-fragment and in the page and compares the bytes, scans the page for scripts,
-event handlers and external references, checks the switcher's wiring and its
-`:checked` rules (and that the inputs precede the panels, which the CSS sibling
-selectors depend on), checks the heading order, `lang`, the panel labelling and
-the scoped table headers, asserts the print rules, computes WCAG contrast ratios
-from the palette actually emitted, and keeps one committed standalone page
-(`testdata/chai.doc.html`) under golden test — the same artifact the browser
-check opens. `go test ./... -update` rewrites that golden along with the two
-per-view goldens.
+`presentation_test.go` covers §4.3: it locates the shared baseline in the
+standalone page and compares the bytes (and asserts neither view fragment
+carries styling), scans the page for scripts, event handlers and external
+references, checks the switcher's wiring and its `:checked` rules (and that the
+inputs precede the panels, which the CSS sibling selectors depend on), checks
+the heading order, `lang`, the panel labelling and the scoped table headers,
+asserts the print rules, computes WCAG contrast ratios from the palette actually
+emitted, and keeps one committed standalone page (`testdata/chai.doc.html`)
+under golden test — the same artifact the browser check opens.
+`go test ./... -update` rewrites that golden along with the two per-view
+goldens.
 
 `testdata/chai.trn.md` and `testdata/guacamole.trn.md` are the canonical examples
 from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
@@ -415,36 +421,39 @@ The renderer's choices where §4 leaves room, each covered in `render_test.go`:
 
 The flow view's choices where §4.2 leaves room, each covered in `flow_test.go`:
 
-18. **Reference arrows are drawn inside the referencing box, naming their
-    source.** §4.2 asks for an arrow connecting the referenced step's box to the
-    referencing one. A continuous connector is only straightforward between
-    neighbouring boxes: the gap depends on font size, wrapping and the heights of
-    the boxes in between, so an edge between non-adjacent boxes would need pixel
-    (or grid-row) geometry baked into the output — and the SVG that would make it
-    easy is forbidden. Instead the boxes sit on a vertical rail with a down-arrow
-    into every box after the first (the sequence of steps), and each reference is
-    an arrow that names the step it comes from — `from ← [1] Crush or grind to a
-    powder` — in the box that makes it. The glyph is CSS-generated
-    (`.trn-flow-ref::before`), so the markup carries no arrows and a re-skin can
-    change them; the word "from" carries the meaning for assistive technology.
-    This is the card's sanctioned fallback (borders/pseudo-elements, or a text
-    arrow — never SVG/images/canvas).
-19. **A chip belongs to the step that first lists the ingredient; a later
-    listing becomes an "again" note.** §4.2 attaches chips to the first
-    appearance, but §10 also requires ingredient strings to survive
-    byte-for-byte, so a re-listed ingredient is not dropped: grocy-1 lists
-    `1 tbsp cilantro` in steps 7 and 10, and step 10 renders it as a dashed,
-    muted chip under an "again" label. Chips plus again notes reproduce each
-    step's ingredient items exactly, in document order — the fuzz target asserts
-    the counts match for arbitrary input.
-20. **The final box is marked three ways**: `trn-flow-step-final` on the list
-    item, a heavier accent border plus a tinted background on the box, and a
-    "final" badge next to the verb — so it stays distinct in print and after
-    re-skinning. It is the last step in document order, the same step W4
-    measures convergence against.
-21. **Chips wrap, and long ingredient text wraps inside its chip** (flex `wrap`
-    plus `overflow-wrap`), so a long list or a long ingredient name never
-    truncates or overflows; the card's fallback explicitly rules out truncation.
+18. **A connector is one classed element naming both ends.** §4.2 asks for an
+    arrow "from each referenced step's box to the referencing step's box",
+    emitted as a classed connector element the site styles. The line itself is
+    left to the site: how far apart two boxes sit depends on font size, wrapping
+    and the heights of everything between them, so baking geometry (or the SVG
+    that would make it easy) into the engine is exactly what the card forbids.
+    Each reference therefore renders as
+    `<span class="trn-flow-arrow" data-from="1" data-to="4">` inside the box that
+    writes it, with `data-from`/`data-to` holding the 1-based document positions
+    of the two boxes — the same numbers as their `id="trn-flow-step-N"`. The
+    element also carries the source's written number and verb as text, so the
+    relationship survives with no CSS at all and assistive technology reads it.
+    A reference to a step that does not exist (W2) renders as
+    `trn-flow-arrow trn-flow-arrow-unknown` with `#n` and no `data-from`: there
+    is no box to point from.
+19. **Box ids use document position, not the written step number.** Gaps and
+    duplicated numbers are warnings (W1), not errors, so the written number is
+    not a unique key — two boxes can both say `[1]`. Positions are unique, so
+    every connector target exists and every arrow resolves to exactly one box
+    (`TestFlowConnectorsPointAtRenderedBoxes`). The box header still shows the
+    document's number, never a renumbered one.
+20. **A chip belongs to the step that first lists the ingredient, and nowhere
+    else.** §4.2 attaches chips to the first appearance only, so a re-listing is
+    not a second chip: grocy-1 lists `1 tbsp cilantro` in steps 7 and 10, and
+    step 10 carries no chip for it. The fuzz target asserts the chip count equals
+    the number of distinct ingredient texts for arbitrary input, and
+    `TestFlowChipsFirstAppearanceOnly` asserts it per fixture.
+21. **The final box is marked by one class.** `trn-flow-final` on the final step's
+    box (`li.trn-flow-step`) — exactly one per document, on the last step in
+    document order, the same step W4 measures convergence against. How it looks
+    (border, tint, badge) is the site's; the engine contributes the hook and
+    nothing else. Chip wrapping and long ingredient names are the site's too: the
+    markup never truncates text, so a `<ul>` of chips can only wrap.
 
 The presentation layer's choices where §4.3 leaves room, each covered in
 `presentation_test.go`:

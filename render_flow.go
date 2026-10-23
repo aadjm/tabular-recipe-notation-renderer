@@ -3,52 +3,38 @@ package trn
 import (
 	"bytes"
 	"html/template"
+	"strconv"
 )
 
 // RenderFlow renders a recipe as the flow view (SPEC-ENGINE §4.2): one box per
 // step in document order, numbered, with the verb as the box header; the
-// ingredients a step introduces as chips on that box; an arrow per reference
-// naming the step it comes from; and a visually distinct box for the final
-// step.
+// ingredients a step introduces as chips on that box; one connector element per
+// reference, pointing from the referenced step's box to the box that draws on
+// it; and the `trn-flow-final` class on the final step's box.
 //
-// The fragment is self-contained, exactly like RenderTable's: classed markup
-// (`trn-flow`, `trn-flow-step`, `trn-chip`, `trn-flow-ref`, …), its own
-// light/dark stylesheet and a print stylesheet, no JavaScript, no images, no
-// external resources — so the embedding site can use it as-is or re-skin it.
+// The output is structure only: no <style>, no <script>, no SVG, no canvas, no
+// image, no view toggle, no external resource. Styling and the view switcher
+// belong to the embedding site (SPEC-ENGINE §4.3); the `trn-*` class names are
+// the contract it styles against. Every user string goes through
+// html/template's escaping paths, so ingredient text keeps its bytes and
+// differs only by HTML escaping (SPEC-ENGINE §10).
 //
-// All user text (title, verbs, ingredients, reference verbs) goes through
-// html/template's escaping paths; ingredient strings keep their bytes and
-// differ only by HTML escaping (SPEC-ENGINE §10). RenderFlow never panics and
-// never errors: a nil recipe renders nothing, a document without steps renders
-// the empty shell.
+// RenderFlow never panics and never errors: a nil recipe renders nothing, a
+// document without steps renders the empty list.
 func RenderFlow(r *Recipe) template.HTML {
 	if r == nil {
 		return ""
 	}
 	var buf bytes.Buffer
-	// The shared presentation baseline (presentation.go) travels inside this
-	// fragment, so the fragment renders the same alone as it does inside
-	// RenderDocument's page.
-	err := flowTemplate.Execute(&buf, flowFragment{
-		CSS:      template.CSS(sharedCSS),
-		flowView: buildFlow(r),
-	})
-	if err != nil {
+	if err := flowTemplate.Execute(&buf, buildFlow(r)); err != nil {
 		// Unreachable: the template is a compile-time constant and the data is
-		// plain strings and ints. Degrade to an empty fragment anyway — this
-		// package never turns a rendering problem into a panic.
+		// plain strings and ints. Degrade to an empty fragment rather than
+		// panic.
 		return ""
 	}
 	// Safe by construction: every byte of user text in buf was written by
-	// html/template's escaper, the rest is this package's own markup and CSS.
+	// html/template's escaper; the rest is this package's own markup.
 	return template.HTML(buf.String())
-}
-
-// flowFragment is the data set for the flow template: the shared presentation
-// baseline plus the flow model of one recipe.
-type flowFragment struct {
-	CSS template.CSS
-	flowView
 }
 
 // flowView is the whole data set handed to the flow template.
@@ -58,43 +44,64 @@ type flowView struct {
 }
 
 // flowStep is one box of the flow view.
+//
+// Pos is the step's 1-based position in the document, not its written number:
+// it is what the box's id and the connectors' data-from/data-to reference, so
+// it stays unique — and every connector has a real target — even when step
+// numbers are duplicated or gapped, which the dialect reports as W1 rather than
+// rejecting.
 type flowStep struct {
+	Pos    int
 	Number int
 	Verb   string
-	Final  bool     // the last step in document order: rendered distinctly
+	Final  bool     // the last step in document order: carries trn-flow-final
 	Chips  []string // ingredients whose first appearance is this step, in order
-	Again  []string // ingredients listed again here, already introduced earlier
-	Refs   []stepRef
+	Arrows []flowArrow
+}
+
+// flowArrow is one reference drawn as a connector into the box that writes it,
+// coming from the box of the step it names.
+//
+// From is 0 for a reference to a step that does not exist (reported as W2): the
+// arrow is still emitted, classed as unknown, carrying the written number only —
+// there is no source box to point from.
+type flowArrow struct {
+	From  int    // 1-based document position of the referenced step; 0 = dangling
+	To    int    // 1-based document position of the box that writes the reference
+	Label string // "[n]" for a resolved reference, "#n" for a dangling one
+	Verb  string // the referenced step's verb; empty when dangling
 }
 
 // buildFlow derives the flow model from the AST.
 //
 // A chip belongs to the step where the ingredient first appears in document
-// order; a later listing of the same text is not a new ingredient, so it lands
-// in Again. Both lists keep document order, and together they carry every
-// ingredient string of the step, so the box shows the same item text the
-// document does (only HTML-escaped).
+// order (SPEC-ENGINE §4.2); a later listing of the same text is not a second
+// chip. References resolve through firstByNumber — the same rule the matrix
+// uses — so the views never disagree about which step a `#n` means.
 func buildFlow(r *Recipe) flowView {
 	view := flowView{Title: r.Title}
 	firstAt := firstByNumber(r)
 	introduced := make(map[string]bool)
 
 	for i, step := range r.Steps {
-		box := flowStep{Number: step.Number, Verb: step.Verb, Final: i == len(r.Steps)-1}
+		box := flowStep{
+			Pos:    i + 1,
+			Number: step.Number,
+			Verb:   step.Verb,
+			Final:  i == len(r.Steps)-1,
+		}
 		for _, item := range step.Items {
 			switch {
 			case item.Ref > 0:
-				ref := stepRef{Number: item.Ref}
+				written := strconv.Itoa(item.Ref)
+				arrow := flowArrow{To: i + 1, Label: "#" + written}
 				if j, ok := firstAt[item.Ref]; ok {
-					ref.Known = true
-					ref.Verb = r.Steps[j].Verb
+					arrow.From = j + 1
+					arrow.Label = "[" + written + "]"
+					arrow.Verb = r.Steps[j].Verb
 				}
-				box.Refs = append(box.Refs, ref)
-			case item.Text != "":
-				if introduced[item.Text] {
-					box.Again = append(box.Again, item.Text)
-					continue
-				}
+				box.Arrows = append(box.Arrows, arrow)
+			case item.Text != "" && !introduced[item.Text]:
 				introduced[item.Text] = true
 				box.Chips = append(box.Chips, item.Text)
 			}
@@ -104,62 +111,30 @@ func buildFlow(r *Recipe) flowView {
 	return view
 }
 
-// flowTemplate emits the flow fragment. Literal markup and CSS live here; every
-// piece of user text is an action, so html/template escapes it in the right
-// context.
+// flowTemplate emits the flow fragment. Literal markup lives here; every piece
+// of user text is an action, so html/template escapes it in the right context.
+// There is no stylesheet, no script and no toggle in the output.
 //
-// Geometry: the boxes sit in a single column on a vertical rail, and the rail
-// carries a down-arrow into every box after the first — that is the sequence of
-// steps. A reference is drawn as an arrow inside the referencing box that names
-// the step it comes from (`← [1] Crush or grind to a powder`), because a line
-// between two arbitrary — possibly far apart — boxes cannot be positioned in CSS
-// without per-edge pixel geometry, which the renderer must not invent (and
-// §4.2 forbids the SVG that would make it easy). The glyph is CSS-generated so
-// the markup carries no arrows; the word "from" carries the meaning for
-// assistive technology, which announces the box, then the steps feeding it.
-//
-// The final box is distinct by a heavier accent border, a tinted background and
-// a "final" badge, so it stays distinct when printed or re-skinned.
-var flowTemplate = template.Must(template.New("trn.flow").Parse(`<figure class="trn trn-view trn-view-flow">
-<style>
-{{.CSS}}.trn-view-flow{--trn-accent:#9a6b1f;--trn-final:#fdf4e0;margin:0;padding:.5rem}
-@media (prefers-color-scheme:dark){.trn-view-flow{--trn-accent:#e0b463;--trn-final:#241f14}}
-.trn-flow-title{margin:0 0 .6rem;font-weight:600}
-.trn-flow{list-style:none;margin:0;padding:0}
-.trn-flow-step{position:relative;margin:0 0 1.15rem;padding-left:1.9rem}
-.trn-flow-step:last-child{margin-bottom:0}
-.trn-flow-step::before{content:"";position:absolute;left:.7rem;top:0;width:2px;height:calc(100% + 1.15rem);background:var(--trn-line)}
-.trn-flow-step:first-child::before{top:1.1rem;height:calc(100% + .05rem)}
-.trn-flow-step:last-child::before{height:1.1rem}
-.trn-flow-step + .trn-flow-step::after{content:"";position:absolute;left:.7rem;top:-.45rem;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--trn-line);transform:translateX(-4px)}
-.trn-flow-box{position:relative;border:1px solid var(--trn-line);border-radius:.5rem;background:var(--trn-head);padding:.55rem .7rem}
-.trn-flow-box::before{content:"";position:absolute;left:-1.2rem;top:1.05rem;width:1.2rem;height:2px;background:var(--trn-line)}
-.trn-flow-head{margin:0;font-size:1rem;font-weight:600}
-.trn-flow-num{font-variant-numeric:tabular-nums;color:var(--trn-muted);font-weight:500}
-.trn-flow-chips{list-style:none;display:flex;flex-wrap:wrap;gap:.3rem;margin:.45rem 0 0;padding:0}
-.trn-chip{display:inline-block;max-width:100%;border:1px solid var(--trn-line);border-radius:999px;background:var(--trn-bg);padding:.1rem .55rem;font-size:.9em;overflow-wrap:anywhere}
-.trn-flow-again{margin:.35rem 0 0;color:var(--trn-muted);font-size:.9em}
-.trn-flow-again-label,.trn-flow-refs-label{font-variant:small-caps;letter-spacing:.04em}
-.trn-chip-again{border-style:dashed;background:transparent;color:var(--trn-muted)}
-.trn-flow-refs{margin:.4rem 0 0;padding-top:.35rem;border-top:1px dashed var(--trn-line);font-size:.9em;color:var(--trn-muted)}
-.trn-flow-ref{display:inline-block}
-.trn-flow-ref::before{content:"← ";color:var(--trn-mark);font-weight:700}
-.trn-flow-ref-num{font-variant-numeric:tabular-nums;color:var(--trn-mark);font-weight:600}
-.trn-flow-ref-unknown .trn-flow-ref-num{color:var(--trn-muted);font-weight:500}
-.trn-flow-step-final .trn-flow-box{border:2px solid var(--trn-accent);background:var(--trn-final)}
-.trn-flow-final-badge{margin-left:.35rem;padding:0 .3rem;border:1px solid var(--trn-accent);border-radius:.25rem;color:var(--trn-accent);font-size:.7em;font-weight:600;letter-spacing:.06em;text-transform:uppercase;vertical-align:.15em}
-@media print{.trn-view-flow{--trn-accent:#000;--trn-final:#fff;padding:0}.trn-flow-step{break-inside:avoid;page-break-inside:avoid}.trn-flow-step-final .trn-flow-box{border-style:double;border-width:4px}}
-</style>
-{{if .Title}}<figcaption class="trn-title trn-flow-title">{{.Title}}</figcaption>
-{{end}}<ol class="trn-flow">
-{{range .Steps}}<li class="trn-flow-step{{if .Final}} trn-flow-step-final{{end}}">
+// Geometry is the site's problem: a connector between two boxes is one element
+// (`trn-flow-arrow`) that names both ends by 1-based document position — the
+// same number as the boxes' `id="trn-flow-step-N"`. The element carries the
+// referenced step's number and verb as text, so the relationship survives with
+// no CSS at all and assistive technology reads it, while a site with a real
+// layout can draw the line from the attributes. Nothing here depends on the two
+// boxes being adjacent, which is why the line itself is not baked in: the gap
+// between arbitrary boxes depends on font size, wrapping and the heights of the
+// boxes in between.
+var flowTemplate = template.Must(template.New("trn.flow").Parse(`<figure class="trn-flow">
+{{- if .Title}}<figcaption class="trn-title trn-flow-title">{{.Title}}</figcaption>{{end}}
+<ol class="trn-flow-steps">
+{{- range .Steps}}<li class="trn-flow-step{{if .Final}} trn-flow-final{{end}}" id="trn-flow-step-{{.Pos}}">
 <div class="trn-flow-box">
-<h3 class="trn-flow-head"><span class="trn-flow-num">[{{.Number}}]</span> <span class="trn-flow-verb">{{.Verb}}</span>{{if .Final}} <span class="trn-flow-final-badge">final</span>{{end}}</h3>
-{{if .Chips}}<ul class="trn-flow-chips">{{range .Chips}}<li class="trn-chip">{{.}}</li>{{end}}</ul>
-{{end}}{{if .Again}}<p class="trn-flow-again"><span class="trn-flow-again-label">again</span>{{range .Again}} <span class="trn-chip trn-chip-again">{{.}}</span>{{end}}</p>
-{{end}}{{if .Refs}}<p class="trn-flow-refs"><span class="trn-flow-refs-label">from</span>{{range .Refs}} <span class="trn-flow-ref{{if not .Known}} trn-flow-ref-unknown{{end}}"><span class="trn-flow-ref-num">{{if .Known}}[{{.Number}}]{{else}}#{{.Number}}{{end}}</span>{{if .Known}} <span class="trn-flow-ref-verb">{{.Verb}}</span>{{end}}</span>{{end}}</p>
-{{end}}</div>
+<h3 class="trn-flow-head"><span class="trn-flow-num">[{{.Number}}]</span> <span class="trn-flow-verb">{{.Verb}}</span></h3>
+{{- if .Chips}}<ul class="trn-flow-chips">{{range .Chips}}<li class="trn-chip">{{.}}</li>{{end}}</ul>{{end}}
+{{- if .Arrows}}<p class="trn-flow-arrows">{{range .Arrows}}<span class="trn-flow-arrow{{if not .From}} trn-flow-arrow-unknown{{end}}"{{if .From}} data-from="{{.From}}"{{end}} data-to="{{.To}}"><span class="trn-flow-arrow-num">{{.Label}}</span>{{if .Verb}} <span class="trn-flow-arrow-verb">{{.Verb}}</span>{{end}}</span>{{end}}</p>{{end}}
+</div>
 </li>
-{{end}}</ol>
+{{end -}}
+</ol>
 </figure>
 `))

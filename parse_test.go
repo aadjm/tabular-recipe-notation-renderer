@@ -575,8 +575,9 @@ func FuzzParse(f *testing.F) {
 		}
 
 		// The flow renderer takes the same arbitrary input: one box per step,
-		// one chip (or "again" note) per ingredient item — so no item text is
-		// dropped — and no unescaped script tag.
+		// one chip per *first* appearance of an ingredient string (SPEC-ENGINE
+		// §4.2 — a later re-listing is not a second chip), and no unescaped
+		// script tag.
 		flow := string(RenderFlow(got))
 		if strings.Contains(flow, "<script") {
 			t.Fatalf("rendered flow view contains an unescaped script tag")
@@ -584,18 +585,17 @@ func FuzzParse(f *testing.F) {
 		if gotBoxes := strings.Count(flow, `<li class="trn-flow-step`); gotBoxes != len(got.Steps) {
 			t.Fatalf("%d flow boxes for %d steps", gotBoxes, len(got.Steps))
 		}
-		items := 0
+		distinct := make(map[string]bool)
 		for _, s := range got.Steps {
 			for _, item := range s.Items {
-				if item.Ref == 0 {
-					items++
+				if item.Ref == 0 && item.Text != "" {
+					distinct[item.Text] = true
 				}
 			}
 		}
 		chips := strings.Count(flow, `<li class="trn-chip">`)
-		again := strings.Count(flow, `<span class="trn-chip trn-chip-again">`)
-		if chips+again != items {
-			t.Fatalf("%d chips + %d again notes for %d ingredient items", chips, again, items)
+		if chips != len(distinct) {
+			t.Fatalf("%d chips for %d distinct ingredient texts", chips, len(distinct))
 		}
 		if RenderFlow(nil) != "" {
 			t.Fatal("RenderFlow(nil) is not the empty fragment")
