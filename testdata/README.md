@@ -68,3 +68,13 @@ d641deb79e821b5db2036c68033c71dd9bff3f8f1e50f847e2d243eec45a106e  grocy-3.trn.md
 If a recipe is edited in Grocy, refetch and update the digest here along with the
 goldens; a mismatch between file and `GET /api/userfields/recipes/<id>` is a
 fixture bug, not a rendering bug.
+
+## Re-verification after the pure-HTML renderer redo (2026-10-23)
+
+After the renderer was rebuilt (rowspan matrix §4.1, flow view §4.2, presentation
+layer dropped §4.3) every golden here was regenerated with `go test ./... -update`;
+that run was a no-op, so the files in this directory are exactly what the current
+renderers emit. The five `grocy-*.trn.md` fixtures were re-fetched from the live
+instance the same day and still hash to the digests above — nothing was refetched
+into the tree, and the API key was never written into the repo (searched the whole
+working tree and every committed blob).
