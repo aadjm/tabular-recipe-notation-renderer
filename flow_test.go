@@ -382,12 +382,12 @@ func TestFlowChipsFirstAppearanceOnly(t *testing.T) {
 	}
 }
 
-// TestFlowRepeatedIngredient covers grocy-1, where "1 tbsp cilantro" is listed
+// TestFlowRepeatedIngredient covers chicken-curry, where "1 tbsp cilantro" is listed
 // twice: it is a chip on step 7 — where it first appears — and step 10, which
 // lists nothing new, carries no chip for it (SPEC-ENGINE §4.2 attaches chips to
 // the first appearance only).
 func TestFlowRepeatedIngredient(t *testing.T) {
-	fragment := string(RenderFlow(loadRecipe(t, "grocy-1.trn.md")))
+	fragment := string(RenderFlow(loadRecipe(t, "chicken-curry.trn.md")))
 	flow := parseFlow(t, fragment)
 	if len(flow.boxes) != 10 {
 		t.Fatalf("got %d boxes, want 10", len(flow.boxes))

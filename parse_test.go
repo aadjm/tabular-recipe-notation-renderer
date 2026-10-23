@@ -175,14 +175,16 @@ func TestContinuationLinesPreserveOrder(t *testing.T) {
 	}
 }
 
-// TestParseLiveGrocyFixtures parses the five real recipes carried by the `trn`
-// userfield on the homelab Grocy instance. The fixtures were fetched read-only
-// and hold recipe text only — never the API key. They are the documents E-A1
-// renders, so they must parse warning-free.
-func TestParseLiveGrocyFixtures(t *testing.T) {
-	wantSteps := map[int]int{1: 10, 2: 4, 3: 4, 4: 6, 5: 5}
-	for id := 1; id <= 5; id++ {
-		file := "grocy-" + strconv.Itoa(id) + ".trn.md"
+// TestParseExampleFixtures parses all five example recipes under examples/input.
+func TestParseExampleFixtures(t *testing.T) {
+	wantSteps := map[string]int{
+		"chicken-curry.trn.md":    10,
+		"guacamole.trn.md":        4,
+		"kraft-dinner.trn.md":     4,
+		"margherita-pizza.trn.md": 6,
+		"chai.trn.md":             5,
+	}
+	for file, steps := range wantSteps {
 		t.Run(file, func(t *testing.T) {
 			got, warnings := Parse(readFixture(t, file))
 			all := append(warnings, ConvergenceWarnings(got)...)
@@ -192,8 +194,8 @@ func TestParseLiveGrocyFixtures(t *testing.T) {
 			if got.Title == "" {
 				t.Error("empty title")
 			}
-			if len(got.Steps) != wantSteps[id] {
-				t.Fatalf("steps = %d, want %d", len(got.Steps), wantSteps[id])
+			if len(got.Steps) != steps {
+				t.Fatalf("steps = %d, want %d", len(got.Steps), steps)
 			}
 			numbers := make(map[int]bool, len(got.Steps))
 			for _, s := range got.Steps {

@@ -65,7 +65,7 @@ Guacamole
 
 Sample inputs and their corresponding rendered HTML outputs are separated under `examples/`:
 
-- `examples/input/` — TRN markdown source files (`*.trn.md`)
+- `examples/input/` — TRN markdown source files (`chai.trn.md`, `chicken-curry.trn.md`, `guacamole.trn.md`, `kraft-dinner.trn.md`, `margherita-pizza.trn.md`)
 - `examples/output/` — rendered HTML fragments (`*.table.html`, `*.flow.html`) and standalone document (`chai.doc.html`)
 
 ## CLI Usage
