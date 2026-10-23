@@ -1,6 +1,6 @@
 # Tabular Recipe Notation Renderer
 
-A pure Go (standard-library-only) parser and HTML renderer for Tabular Recipe Notation (TRN). It turns a plain-text TRN markdown document into semantic, unstyled HTML — either a Cooking-for-Engineers-style recipe summary table (`RenderTable`), a step flow diagram (`RenderFlow`), or a complete standalone HTML page (`RenderDocument`).
+A pure Go (standard-library-only) parser and HTML renderer for Tabular Recipe Notation (TRN). It turns a plain-text TRN markdown document into semantic, unstyled HTML — a Cooking-for-Engineers-style recipe summary table, a step flow diagram, or a standalone HTML document.
 
 ## Installation
 
@@ -61,6 +61,13 @@ Guacamole
   1 tsp salt
 ```
 
+## Examples Directory
+
+Sample inputs and their corresponding rendered HTML outputs are separated under `examples/`:
+
+- `examples/input/` — TRN markdown source files (`*.trn.md`)
+- `examples/output/` — rendered HTML fragments (`*.table.html`, `*.flow.html`) and standalone document (`chai.doc.html`)
+
 ## CLI Usage
 
 ```
@@ -72,18 +79,20 @@ trn-render [flags] [file.md | -]
 ```
 
 - Pass a file path, `-`, or no positional argument to read from standard input.
-- Without `--standalone`, `trn-render` outputs the requested HTML fragment(s).
-- With `--standalone`, `trn-render` outputs a complete HTML document containing both views.
+- Use `--view table`, `--view flow`, or `--view both` (with or without `--standalone`) to toggle and render each view separately or together.
 
 ```sh
-# Render a standalone HTML file
-trn-render testdata/chai.trn.md --standalone > chai.html
+# Render a standalone HTML page with only the recipe summary table
+trn-render examples/input/chai.trn.md --standalone --view table > chai-table.html
 
-# Render only the tabular recipe summary table fragment
-trn-render testdata/guacamole.trn.md --view table > guacamole-table.html
+# Render a standalone HTML page with only the flow diagram
+trn-render examples/input/chai.trn.md --standalone --view flow > chai-flow.html
+
+# Render only the table HTML fragment (for embedding in another page)
+trn-render examples/input/guacamole.trn.md --view table > guacamole.table.html
 
 # Read from stdin and override the recipe title
-cat testdata/kraft-dinner.trn.md | trn-render --view flow --title "Mac & Cheese"
+cat examples/input/kraft-dinner.trn.md | trn-render --view flow --title "Mac & Cheese"
 ```
 
 ### Exit Codes
@@ -119,19 +128,29 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", w.Code, w.Msg)
 	}
 
-	tableHTML := trn.RenderTable(recipe) // template.HTML fragment
-	flowHTML := trn.RenderFlow(recipe)   // template.HTML fragment
-	pageHTML := trn.RenderDocument(recipe)
+	// Render individual HTML fragments:
+	tableHTML := trn.RenderTable(recipe)             // or trn.RenderView(recipe, trn.ViewTable)
+	flowHTML := trn.RenderFlow(recipe)               // or trn.RenderView(recipe, trn.ViewFlow)
+
+	// Render standalone HTML documents (toggleable per view):
+	tableDoc := trn.RenderDocumentView(recipe, trn.ViewTable)
+	flowDoc := trn.RenderDocumentView(recipe, trn.ViewFlow)
+	bothDoc := trn.RenderDocument(recipe)
 
 	fmt.Println(tableHTML)
-	_ = flowHTML
-	_ = pageHTML
+	_, _, _, _ = flowHTML, tableDoc, flowDoc, bothDoc
 }
 ```
 
 ### API Reference
 
 ```go
+const (
+	ViewTable = "table"
+	ViewFlow  = "flow"
+	ViewBoth  = "both"
+)
+
 type Recipe struct {
 	Title string
 	Steps []Step
@@ -157,7 +176,9 @@ func Parse(input string) (*Recipe, []Warning)
 func ConvergenceWarnings(r *Recipe) []Warning
 func RenderTable(r *Recipe) template.HTML
 func RenderFlow(r *Recipe) template.HTML
+func RenderView(r *Recipe, view string) template.HTML
 func RenderDocument(r *Recipe) template.HTML
+func RenderDocumentView(r *Recipe, view string) template.HTML
 ```
 
 ## Warning Codes
@@ -213,14 +234,13 @@ The renderer emits semantic HTML only (no `<style>` or `<script>` tags). Style t
 | `trn-flow-arrows`, `trn-flow-arrow` | `p`, `span` | Connectors (`data-from`, `data-to`) from referenced steps |
 | `trn-flow-arrow-unknown` | `span` | Modifier on `trn-flow-arrow` when a reference is unresolved (`W2`) |
 
-### Standalone Document (`RenderDocument`)
+### Standalone Document (`RenderDocument` / `RenderDocumentView`)
 
 | Class | Element | Description |
 |---|---|---|
 | `trn-doc` | `body` | Document body |
 | `trn-doc-title` | `h1` | Page heading |
 | `trn-doc-view`, `trn-doc-view-table`, `trn-doc-view-flow` | `section` | View sections |
-| `trn-doc-heading` | `h2` | Section heading (`Table` or `Flow`) |
 
 ## License
 

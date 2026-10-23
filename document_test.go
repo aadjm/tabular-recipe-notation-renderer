@@ -3,8 +3,6 @@ package trn
 import (
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -70,26 +68,14 @@ func TestDocumentStructure(t *testing.T) {
 		if n := strings.Count(doc, "<h1"); n != 1 {
 			t.Errorf("%s: h1 count = %d, want exactly 1", name, n)
 		}
-		if n := strings.Count(doc, "<h2"); n != 2 {
-			t.Errorf("%s: h2 count = %d, want 2 (one per view section)", name, n)
+		if n := strings.Count(doc, "<h2"); n != 0 {
+			t.Errorf("%s: h2 count = %d, want 0 (no section headers)", name, n)
 		}
 		if n := strings.Count(doc, "<h1"); n > 0 && !strings.Contains(doc, `<h1 class="trn-doc-title">`+htmlText(t, r.Title)+`</h1>`) {
 			t.Errorf("%s: page heading does not carry the recipe title", name)
 		}
 
-		// Heading order: never skip a level going down.
-		levels := headingLevels(doc)
-		if len(levels) == 0 || levels[0] != 1 {
-			t.Fatalf("%s: heading levels start with %v, want h1 first", name, levels)
-		}
-		for i := 1; i < len(levels); i++ {
-			if levels[i] > levels[i-1]+1 {
-				t.Errorf("%s: heading order skips a level: %v", name, levels)
-				break
-			}
-		}
-
-		// Both views, in order, each under its own heading.
+		// Both views, in order, each in its own section.
 		tableAt := strings.Index(doc, `<table class="trn-table">`)
 		flowAt := strings.Index(doc, `<figure class="trn-flow">`)
 		if tableAt < 0 || flowAt < 0 {
@@ -99,8 +85,6 @@ func TestDocumentStructure(t *testing.T) {
 			t.Errorf("%s: the tabular view must come first", name)
 		}
 		for _, want := range []string{
-			`<h2 class="trn-doc-heading">Table</h2>`,
-			`<h2 class="trn-doc-heading">Flow</h2>`,
 			`<section class="trn-doc-view trn-doc-view-table">`,
 			`<section class="trn-doc-view trn-doc-view-flow">`,
 			`<th scope="row"`,
@@ -108,6 +92,22 @@ func TestDocumentStructure(t *testing.T) {
 			if !strings.Contains(doc, want) {
 				t.Errorf("%s: document is missing %q", name, want)
 			}
+		}
+
+		// Verify toggleable views via RenderDocumentView and RenderView.
+		docTable := string(RenderDocumentView(r, ViewTable))
+		if !strings.Contains(docTable, `<table class="trn-table">`) || strings.Contains(docTable, `<figure class="trn-flow">`) {
+			t.Errorf("%s: RenderDocumentView(ViewTable) did not isolate table view", name)
+		}
+		docFlow := string(RenderDocumentView(r, ViewFlow))
+		if !strings.Contains(docFlow, `<figure class="trn-flow">`) || strings.Contains(docFlow, `<table class="trn-table">`) {
+			t.Errorf("%s: RenderDocumentView(ViewFlow) did not isolate flow view", name)
+		}
+		if got := RenderView(r, ViewTable); got != RenderTable(r) {
+			t.Errorf("%s: RenderView(ViewTable) != RenderTable", name)
+		}
+		if got := RenderView(r, ViewFlow); got != RenderFlow(r) {
+			t.Errorf("%s: RenderView(ViewFlow) != RenderFlow", name)
 		}
 	}
 }
@@ -173,7 +173,7 @@ func TestRenderDocumentNil(t *testing.T) {
 // E-A1 artifact a browser opens is the renderer's actual output.
 // Rebuild with `go test ./... -update`.
 func TestGoldenDocument(t *testing.T) {
-	golden := filepath.Join("testdata", "chai.doc.html")
+	golden := filepath.Join(outputDir, "chai.doc.html")
 	got := string(RenderDocument(loadRecipe(t, "chai.trn.md")))
 	if *update {
 		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
@@ -188,20 +188,6 @@ func TestGoldenDocument(t *testing.T) {
 	if got != string(want) {
 		t.Errorf("document differs from %s%s", golden, firstDiff(string(want), got))
 	}
-}
-
-// headingLevels lists the h1…h6 levels in document order.
-func headingLevels(html string) []int {
-	re := regexp.MustCompile(`<h([1-6])[ >]`)
-	var levels []int
-	for _, m := range re.FindAllStringSubmatch(html, -1) {
-		n, err := strconv.Atoi(m[1])
-		if err != nil {
-			continue
-		}
-		levels = append(levels, n)
-	}
-	return levels
 }
 
 // htmlText escapes s the way html/template does in text context, for tests that

@@ -60,12 +60,8 @@ A file argument of "-" (or no argument) reads standard input. Flags may precede
 or follow the file argument.
 
 Without --standalone the output is the requested view fragment(s) — the matrix,
-the flow view, or both separated by a newline — which is what the TRN site
-embeds. With --standalone the output is the complete page from the library's
-RenderDocument: a title and both views in one plain HTML document. The engine
-emits structure only (no stylesheet, no script, no controls), so the page is
-unstyled; a standalone page always carries both views, so --view selects
-fragments only — use --view without --standalone when you want one view alone.
+the flow view, or both separated by a newline. With --standalone the output is
+a complete plain HTML document containing the requested view(s).
 
 Warnings (W1-W7) are reported on stderr, one "trn-render: CODE: message" line
 each, and never change the exit status.
@@ -131,19 +127,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // output is the same function pair the site calls, joined as §5 describes.
 func render(r *trn.Recipe, o options) string {
 	if o.standalone {
-		return string(trn.RenderDocument(r))
+		return string(trn.RenderDocumentView(r, o.view))
 	}
-	var b strings.Builder
-	if o.view != viewFlow {
-		b.WriteString(string(trn.RenderTable(r)))
-	}
-	if o.view == viewBoth {
-		b.WriteString("\n")
-	}
-	if o.view != viewTable {
-		b.WriteString(string(trn.RenderFlow(r)))
-	}
-	return b.String()
+	return string(trn.RenderView(r, o.view))
 }
 
 // readInput reads the whole input, whether it comes from a file or stdin.

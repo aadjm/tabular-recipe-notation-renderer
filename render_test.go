@@ -137,9 +137,14 @@ func (tbl parsedTable) row(index int) parsedRow {
 	return empty
 }
 
+const (
+	inputDir  = "examples/input"
+	outputDir = "examples/output"
+)
+
 func loadRecipe(t *testing.T, name string) *Recipe {
 	t.Helper()
-	src, err := os.ReadFile("testdata/" + name)
+	src, err := os.ReadFile(filepath.Join(inputDir, name))
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}
@@ -741,16 +746,16 @@ func TestRenderTableDegenerateSteps(t *testing.T) {
 // fixtureNames lists the committed *.trn.md fixtures by base name.
 func fixtureNames(t *testing.T) []string {
 	t.Helper()
-	matches, err := filepath.Glob("testdata/*.trn.md")
+	matches, err := filepath.Glob(filepath.Join(inputDir, "*.trn.md"))
 	if err != nil {
 		t.Fatalf("glob fixtures: %v", err)
 	}
 	if len(matches) == 0 {
-		t.Fatal("no fixtures found under testdata/")
+		t.Fatal("no fixtures found under examples/input/")
 	}
 	names := make([]string, 0, len(matches))
 	for _, path := range matches {
-		names = append(names, strings.TrimPrefix(path, "testdata/"))
+		names = append(names, filepath.Base(path))
 	}
 	return names
 }

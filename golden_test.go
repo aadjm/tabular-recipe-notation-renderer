@@ -13,10 +13,10 @@ import (
 // update rewrites the committed goldens instead of comparing against them:
 //
 //	go test ./... -update
-var update = flag.Bool("update", false, "rewrite testdata/*.table.html and testdata/*.flow.html goldens")
+var update = flag.Bool("update", false, "rewrite examples/output/*.table.html and *.flow.html goldens")
 
 // TestGoldenTable compares the matrix view for every fixture with its committed
-// golden file (SPEC-ENGINE §6: golden-file tests, rebuild with -update).
+// golden file (rebuild with -update).
 func TestGoldenTable(t *testing.T) {
 	compareGoldens(t, ".table.html", RenderTable)
 }
@@ -28,13 +28,13 @@ func TestGoldenFlow(t *testing.T) {
 	compareGoldens(t, ".flow.html", RenderFlow)
 }
 
-// compareGoldens compares one view's rendering of every testdata/<name>.trn.md
-// with the committed testdata/<name><suffix> golden.
+// compareGoldens compares one view's rendering of every examples/input/<name>.trn.md
+// with the committed examples/output/<name><suffix> golden.
 func compareGoldens(t *testing.T, suffix string, render func(*Recipe) template.HTML) {
 	t.Helper()
 	for _, name := range fixtureNames(t) {
 		base := strings.TrimSuffix(name, ".trn.md")
-		golden := filepath.Join("testdata", base+suffix)
+		golden := filepath.Join(outputDir, base+suffix)
 		t.Run(base, func(t *testing.T) {
 			got := string(render(loadRecipe(t, name)))
 			if *update {
@@ -56,13 +56,13 @@ func compareGoldens(t *testing.T, suffix string, render func(*Recipe) template.H
 		return
 	}
 	// A golden without its fixture means a stale, never-compared file.
-	goldens, err := filepath.Glob("testdata/*" + suffix)
+	goldens, err := filepath.Glob(filepath.Join(outputDir, "*"+suffix))
 	if err != nil {
 		t.Fatalf("glob goldens: %v", err)
 	}
 	for _, golden := range goldens {
 		base := strings.TrimSuffix(filepath.Base(golden), suffix)
-		if _, err := os.Stat(filepath.Join("testdata", base+".trn.md")); err != nil {
+		if _, err := os.Stat(filepath.Join(inputDir, base+".trn.md")); err != nil {
 			t.Errorf("golden %s has no matching fixture", golden)
 		}
 	}

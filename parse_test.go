@@ -25,7 +25,7 @@ func ref(n int) Item { return Item{Ref: n} }
 
 func readFixture(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", name))
+	b, err := os.ReadFile(filepath.Join(inputDir, name))
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}

@@ -16,8 +16,8 @@ import (
 // bytes the library does, so tests compare against library output and, for the
 // standalone page, against the committed browser-verified golden.
 const (
-	chaiFixture = "../../testdata/chai.trn.md"
-	chaiDoc     = "../../testdata/chai.doc.html"
+	chaiFixture = "../../examples/input/chai.trn.md"
+	chaiDoc     = "../../examples/output/chai.doc.html"
 )
 
 // update mirrors the engine package's -update flag (golden_test.go) so that
@@ -174,28 +174,45 @@ func TestStandaloneTitleOverride(t *testing.T) {
 	}
 }
 
-// TestStandaloneCarriesBothViews locks the documented interaction: a standalone
-// page is the RenderDocument page — both views in one plain document, whatever
-// --view says. The flag selects fragments only. The page is pure HTML: it has
-// no switcher and no script, because styling and controls belong to the site
-// (SPEC-SITE §7).
-func TestStandaloneCarriesBothViews(t *testing.T) {
-	plain := runCLI(t, mustRead(t, chaiFixture), "--standalone")
-	for _, view := range []string{viewTable, viewFlow, viewBoth} {
-		got := runCLI(t, mustRead(t, chaiFixture), "--standalone", "--view", view)
-		if got.code != exitOK {
-			t.Fatalf("--view %s: exit = %d, want %d", view, got.code, exitOK)
-		}
-		if got.stdout != plain.stdout {
-			t.Errorf("--standalone --view %s changed the page", view)
-		}
+// TestStandaloneViewSelection checks that --standalone respects --view so each
+// view can be rendered separately as a standalone document or together.
+func TestStandaloneViewSelection(t *testing.T) {
+	src := mustRead(t, chaiFixture)
+	r := parseFixture(t, chaiFixture)
+
+	both := runCLI(t, src, "--standalone")
+	if both.code != exitOK {
+		t.Fatalf("exit = %d, want %d", both.code, exitOK)
 	}
-	if !strings.Contains(plain.stdout, `<table class="trn-table">`) || !strings.Contains(plain.stdout, `<figure class="trn-flow">`) {
-		t.Error("standalone page is missing one of the two views")
+	if !strings.Contains(both.stdout, `<table class="trn-table">`) || !strings.Contains(both.stdout, `<figure class="trn-flow">`) {
+		t.Error("default standalone page is missing one of the two views")
 	}
-	for _, bad := range []string{"<input", "<style", "<script", "trn-view-toggle"} {
-		if strings.Contains(plain.stdout, bad) {
-			t.Errorf("standalone page contains %q; the engine emits structure only (SPEC-ENGINE §4.3)", bad)
+
+	tableOnly := runCLI(t, src, "--standalone", "--view", viewTable)
+	if tableOnly.code != exitOK {
+		t.Fatalf("table exit = %d, want %d", tableOnly.code, exitOK)
+	}
+	if tableOnly.stdout != string(trn.RenderDocumentView(r, trn.ViewTable)) {
+		t.Error("--standalone --view table differs from RenderDocumentView(ViewTable)")
+	}
+	if !strings.Contains(tableOnly.stdout, `<table class="trn-table">`) || strings.Contains(tableOnly.stdout, `<figure class="trn-flow">`) {
+		t.Error("--standalone --view table did not isolate table view")
+	}
+
+	flowOnly := runCLI(t, src, "--standalone", "--view", viewFlow)
+	if flowOnly.code != exitOK {
+		t.Fatalf("flow exit = %d, want %d", flowOnly.code, exitOK)
+	}
+	if flowOnly.stdout != string(trn.RenderDocumentView(r, trn.ViewFlow)) {
+		t.Error("--standalone --view flow differs from RenderDocumentView(ViewFlow)")
+	}
+	if !strings.Contains(flowOnly.stdout, `<figure class="trn-flow">`) || strings.Contains(flowOnly.stdout, `<table class="trn-table">`) {
+		t.Error("--standalone --view flow did not isolate flow view")
+	}
+
+	for _, bad := range []string{"<input", "<style", "<script", "trn-view-toggle", "<h2"} {
+		if strings.Contains(both.stdout, bad) {
+			t.Errorf("standalone page contains %q; the engine emits structure only", bad)
 		}
 	}
 }
