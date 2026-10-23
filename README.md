@@ -15,6 +15,10 @@ embedding site owns styling (see [Styling contract](#styling-contract-spec-engin
 - **Implementation**: tracked as Kanban cards `TRN-ENG-1` … `TRN-ENG-8`.
 - **Constraints (non-negotiable)**: Go stdlib only; never panic on input; HTML
   generated via `html/template` escaping paths.
+- **Release**: `v0.1.0` is the first tag of the pure-HTML renderer and the version
+  the TRN site pins
+  (`go get github.com/aadjm/tabular-recipe-notation-renderer@v0.1.0`). The module
+  has no dependencies, so it pulls nothing and needs no `go.sum` entries.
 
 ## Status
 
@@ -386,6 +390,31 @@ input could not be read or the output could not be written; 2 for a usage error
 included) are printed to stderr, one `trn-render: W2: …` line each, and never
 change the exit status.
 
+### As a library (what the TRN site does)
+
+```go
+import (
+    "html/template"
+
+    trn "github.com/aadjm/tabular-recipe-notation-renderer"
+)
+
+recipe, warnings := trn.Parse(userfieldText)        // never an error, never a panic
+warnings = append(warnings, trn.ConvergenceWarnings(recipe)...) // adds the W4 half
+table := trn.RenderTable(recipe)                    // template.HTML fragment
+flow := trn.RenderFlow(recipe)                      // template.HTML fragment
+page := trn.RenderDocument(recipe)                  // complete page (CLI --standalone)
+```
+
+```console
+$ go get github.com/aadjm/tabular-recipe-notation-renderer@v0.1.0
+```
+
+Both fragments are `template.HTML`, so a handler writes them into its own page
+with `{{.Table}}` / `{{.Flow}}` and styles them by the `trn-*` classes above. The
+CLI is a thin wrapper over the same calls, so a page the site builds and a page
+`trn-render --standalone` writes carry identical markup.
+
 SPEC-ENGINE §5 writes the path as `engine/cmd/trn-render/main.go`; this
 repository's root **is** the engine module, so the command lives at
 `cmd/trn-render/main.go`.
@@ -461,13 +490,14 @@ The renderer's choices where §4 leaves room, each covered in `render_test.go`:
     Every step still gets a column, because §4.1 defines columns as the steps in
     document order: chai therefore has 5 columns and steps 4 and 5 as action
     rows.
-15. **E-A2's "11 ingredient rows" does not follow from §4.1.** The chai document
-    has 8 unique ingredients — 11 is the item count of steps 1–4 with the three
-    references counted as items. §4.1 ("rows: unique ingredients") is normative,
-    so the matrix has 8 rows; `TestEA2ChaiMatrix` asserts the semantic numbers
-    (8 rows × 5 columns, rowspans 4/6/8, 2 action rows, every ingredient
-    covered by the finished-dish cell) instead of three invented rows. Recorded
-    here rather than silently resolved.
+15. **E-A2 counts 8 ingredient rows, and the spec now says so.** An earlier revision
+    of E-A2 said "11 ingredient rows" — 11 is the item count of steps 1–4 with the
+    three references counted as items, so it contradicted §4.1 ("rows: unique
+    ingredients"), which is normative. The criterion was corrected to 8 in the spec
+    (`aadjm/trn` 44fac65); `TestEA2ChaiMatrix` asserts the semantic numbers
+    (8 rows × 5 columns, rowspans 4/6/8, 2 action rows, every ingredient covered by
+    the finished-dish cell), so the implemented matrix and E-A2 agree with no
+    invented rows.
 16. **Degenerate input renders, never errors.** `RenderTable(nil)` returns an
     empty fragment; a document without steps renders the table shell (header row
     only); an empty title omits the `<caption>`; an empty verb (W7) leaves a step
