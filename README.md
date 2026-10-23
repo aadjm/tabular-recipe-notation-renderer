@@ -3,8 +3,9 @@
 The core engine of [TRN](https://github.com/aadjm/trn): a pure Go (stdlib-only)
 renderer that turns the frozen TRN markdown dialect into semantic HTML —
 Cooking-for-Engineers-style matrix and flow views. No network, no filesystem
-access beyond the input, no state, no JavaScript in its output. The matrix view
-is pure structure (no embedded CSS at all); the embedding site owns styling.
+access beyond the input, no state, no JavaScript in its output. Every output is
+pure structure: classed HTML and nothing else, with no embedded CSS — the
+embedding site owns styling (see [Styling contract](#styling-contract-spec-engine-43)).
 
 - **Contract**: [`SPEC-ENGINE.md`](https://github.com/aadjm/trn/blob/main/docs/SPEC-ENGINE.md)
   in the `aadjm/trn` repo is the source of truth for the dialect, the library API,
@@ -24,7 +25,7 @@ is pure structure (no embedded CSS at all); the embedding site owns styling.
 | Warning W4 (ingredient never reaches the final step) | implemented (render time) — `ConvergenceWarnings`, `warnings.go` |
 | Matrix view (`RenderTable`) | implemented — `render_table.go` |
 | Flow view (`RenderFlow`) | implemented — `render_flow.go` |
-| Presentation layer, CSS-only view switcher, standalone document (`RenderDocument`) | implemented — `presentation.go` |
+| Standalone document (`RenderDocument`) | implemented — `render_document.go` (plain HTML: title + both views, no styling) |
 | CLI (`cmd/trn-render`) | implemented — `cmd/trn-render/main.go` |
 
 ## The dialect
@@ -155,62 +156,118 @@ Both renderers read the same AST and agree on how a reference resolves
 (`firstByNumber`: the first appearance of the step number), so the views never
 disagree about which step a `#n` means.
 
-`RenderDocument` wraps both fragments in one complete page — the recipe title as
-an `h1`, a CSS-only switcher between the views, and both views in the same
-document. It is what the `trn-render` CLI emits for `--standalone`; the site does
-not need it, because the site owns its own page and embeds the fragments. Set
-`Recipe.Title` before calling to override the title shown; a recipe without a
-title falls back to "Recipe". The page declares `lang="en"`, and a nil recipe
-renders an empty page rather than an error.
+`RenderDocument` wraps both fragments in one complete, plain HTML page: the
+recipe title as the `h1`, then the matrix and the flow view side by side in
+document order, each in its own `<section>` named by an `h2` ("Table", "Flow").
+It is what the `trn-render` CLI emits for `--standalone`; the site does not need
+it, because the site owns its own page and embeds the fragments. There is no
+switcher and no stylesheet in the page — how the two views are toggled or
+skinned is the site's business (SPEC-SITE §7), and an unstyled standalone page
+simply shows both. Set `Recipe.Title` before calling to override the title
+shown; a recipe without a title falls back to "Recipe". The page declares
+`lang="en"`, and a nil recipe renders an empty page rather than an error. Both
+fragments keep their own `caption`/`figcaption`, so the title appears in the
+page heading, the table caption and the flow caption: each is a label for its
+own element, not decoration to be styled away.
 
-## Presentation (SPEC-ENGINE §4.3)
+## Styling contract (SPEC-ENGINE §4.3)
 
-**Both views are pure HTML** (§4.3: structure, not appearance): neither fragment
-carries `<style>`, `<script>` or a view toggle. The one place the engine still
-emits CSS is the standalone page `RenderDocument` wraps around them — the page
-chrome (title, switcher, panels, print rules) plus the shared baseline — and
-that exists only so `trn-render --standalone` produces a file that renders; the
-site embeds the two fragments and owns its own stylesheet.
+**The engine emits structure, the site emits CSS.** Every `Render*` — the two
+view fragments and the standalone page — is classed semantic HTML and nothing
+else: no `<style>`, no `<script>`, no `<input>` or any other control, no
+`style=` attribute, no CSS custom property, no `@media`, no webfont, image,
+`url()` or external reference. `document_test.go:TestRenderOutputIsPureHTML`
+scans all three outputs for every fixture and for the degenerate recipes against
+exactly that list, so this is enforced, not just stated.
 
-- **One baseline, embedded once.** `sharedCSS` in `presentation.go` holds the
-  palette custom properties, the system font stack
-  (`system-ui, -apple-system, "Segoe UI", Roboto, …` — no webfonts, no CDN), the
-  `prefers-color-scheme: dark` variant and the print reset. Only the standalone
-  page embeds it (composed with the chrome rules into one `<style>` element),
-  delimited by `/* trn:shared:start */ … /* trn:shared:end */` so a deployment's
-  stylesheet can be audited, and `TestSharedStylesheetIsSingleSource` proves the
-  page carries exactly those bytes, exactly once — and that both fragments carry
-  none of it.
-- **Zero JavaScript, CSS-only switcher.** The view switcher is a radio group —
-  two `input type=radio` with `label`s, styled by `:checked`, driving the two
-  panels through sibling selectors (`#trn-tab-flow:checked ~ .trn-panel-…`).
-  Radios rather than a checkbox or `:target` tabs because the two views are
-  mutually exclusive by nature, and a radio group already carries that meaning:
-  arrow keys move between the options, assistive technology announces the
-  selected one, and no state has to be hidden in a URL fragment. The inputs are
-  visually hidden but stay focusable; the focus ring is drawn on the label.
-- **Light and dark** come from CSS custom properties flipped by
-  `prefers-color-scheme`. Every foreground/background pair the page uses is
-  checked by `TestPaletteContrast` against the hex values actually emitted: text
-  pairs clear 4.5:1 and the marker glyphs clear 3:1, in both schemes and in
-  print.
-- **Print prints the matrix.** The engine's page suppresses the flow panel and
-  the tabs in print and forces the matrix panel visible whatever is selected on
-  screen. The matrix's own page rules (landscape `@page`, fixed 8pt layout,
-  repeated header row, unbreakable rows) are the site's job now that the fragment
-  is pure HTML — an unstyled table still prints, it just fills the page.
-- **Accessibility.** `lang` on the page, one `h1` (the recipe title) followed by
-  an `h2` per view panel and the flow view's `h3` step boxes — a logical
-  outline; panels are labelled by their tab (`aria-labelledby`); the matrix is a
-  real `<table>` with `<th scope="col">` for step columns and `<th scope="row">`
-  for ingredients, so the rowspan cells are announced with both their column and
-  their row; the flow view's connectors are text (the source step's number and
-  verb), so they are announced too, not just drawn.
-- **Re-skinning.** Every element carries a `trn-*` class (`trn-table`,
-  `trn-row`, `trn-step`, `trn-ingredient`, `trn-gap`, `trn-action`, `trn-flow`,
-  `trn-flow-step`, `trn-flow-box`, `trn-flow-final`, `trn-chip`,
-  `trn-flow-arrow`, …), so the embedding site can restyle the views with its own
-  CSS without touching the markup or the engine.
+The `trn-*` class names below are therefore the **public styling API**: a
+stylesheet (the site's `static/style.css`, SPEC-SITE §7) styles the fragments by
+these names alone, and renaming or dropping one breaks that stylesheet. Adding a
+class is additive; changing the meaning of an existing one is a breaking change.
+
+### Matrix view — `RenderTable` (SPEC-ENGINE §4.1)
+
+| Class | Element | Meaning |
+|---|---|---|
+| `trn-table` | `table` | fragment root; a real `<table>` |
+| `trn-title` | `caption` | the recipe title; omitted when the title is empty (W6) |
+| `trn-head` | `tr` in `<thead>` | the header row |
+| `trn-corner` | `th scope="col"` | the leading label cell ("Ingredient") |
+| `trn-step` | `th` in the head, `td` in the body | a step column header, or a step's `rowspan` cell |
+| `trn-step-head` | `th` (`trn-step`) | modifier marking the header variant of `trn-step` |
+| `trn-step-num` | `span` | the written step number as `[n]` |
+| `trn-step-verb` | `span` | the step's verb, in a header or in a `rowspan` cell |
+| `trn-row` | `tr` in `<tbody>` | one ingredient row |
+| `trn-ingredient` | `th scope="row"` | the ingredient label of that row |
+| `trn-gap` | `td` | an empty placeholder cell (with `colspan`) holding a column open so the implicit grid cannot slide the step cell left; carries no text and no meaning |
+| `trn-action` | `tr` | a full-width action row: a step that introduces no ingredient (all items are `#refs`) |
+| `trn-action-cell` | `td` | that row's single `colspan` cell |
+| `trn-action-num` | `span` | the step number `[n]` in an action row |
+| `trn-action-verb` | `span` | the verb in an action row |
+| `trn-action-refs` | `span` | wrapper around the steps the action row references |
+| `trn-action-ref` | `span` | one referenced step, as `[n] verb` — or `#n` when the reference is dangling (W2) |
+
+### Flow view — `RenderFlow` (SPEC-ENGINE §4.2)
+
+| Class | Element | Meaning |
+|---|---|---|
+| `trn-flow` | `figure` | fragment root |
+| `trn-title` | `figcaption` (`trn-flow-title`) | the recipe title; omitted when empty (W6) |
+| `trn-flow-title` | `figcaption` | modifier with `trn-title`, marking it as the figure's title |
+| `trn-flow-steps` | `ol` | the steps in document order |
+| `trn-flow-step` | `li` | one step's box; `id="trn-flow-step-<pos>"` (1-based document position, the connector target) |
+| `trn-flow-final` | `li` (`trn-flow-step`) | modifier on the final step in document order — exactly one per document |
+| `trn-flow-box` | `div` | the box inside the list item |
+| `trn-flow-head` | `h3` | the step's header, `[n]` + verb |
+| `trn-flow-num` | `span` | the written step number as `[n]` |
+| `trn-flow-verb` | `span` | the verb |
+| `trn-flow-chips` | `ul` | the ingredients this step introduces (first appearance only); omitted when the step adds none |
+| `trn-chip` | `li` | one ingredient |
+| `trn-flow-arrows` | `p` | wrapper around this box's connectors; omitted when it references nothing |
+| `trn-flow-arrow` | `span` | one reference: `data-to` is this box's position, `data-from` the referenced box's position (absent when the reference is dangling) |
+| `trn-flow-arrow-unknown` | `span` (`trn-flow-arrow`) | modifier: the reference names a step that does not exist (W2) |
+| `trn-flow-arrow-num` | `span` | the source step's `[n]`, as text |
+| `trn-flow-arrow-verb` | `span` | the source step's verb, as text |
+
+A connector carries `data-from`/`data-to` and readable text (`[n]` + the source
+verb), so a stylesheet may draw the line between the two boxes by id, and an
+unstyled page — or a screen reader — still states the relationship.
+
+### Standalone document — `RenderDocument` (SPEC-ENGINE §5 `--standalone`)
+
+| Class | Element | Meaning |
+|---|---|---|
+| `trn-doc` | `body` | the page root |
+| `trn-doc-title` | `h1` | the page heading: the recipe title (or "Recipe", W6) |
+| `trn-doc-view` | `section` | one view, named by its `h2` |
+| `trn-doc-view-table` | `section` (`trn-doc-view`) | the matrix section, first |
+| `trn-doc-view-flow` | `section` (`trn-doc-view`) | the flow section, second |
+| `trn-doc-heading` | `h2` | the section's name: "Table" or "Flow" |
+
+### Retired names
+
+The pure-HTML rewrite removed the presentation layer, so these are **not**
+emitted any more and a stylesheet must not expect them: `trn-view`,
+`trn-view-flow`, `trn-view-toggle`, `trn-views`, `trn-tab`, `trn-tab-table`,
+`trn-tab-flow`, `trn-panel`, `trn-panel-table`, `trn-panel-flow`,
+`trn-panel-heading`, `trn-label-table`, `trn-label-flow`, `trn-sr-only`,
+`trn-flow-ref`, `trn-flow-refs`, `trn-flow-ref-num`, `trn-flow-ref-verb`,
+`trn-flow-ref-unknown`, `trn-flow-step-final`, `trn-flow-final-badge`,
+`trn-chip-again`, `trn-flow-again`, `trn-flow-again-label`.
+
+### What the engine deliberately does not do
+
+- **No view toggle.** Two views are two sections in the standalone page; the
+  site decides how to switch between the fragments it embeds (CSS-only, per
+  SPEC-SITE §7).
+- **No dark mode, no palette, no fonts.** `prefers-color-scheme`, print rules
+  and the type stack all live in the site's stylesheet.
+- **No print stylesheet.** An unstyled table still prints; the site's page
+  rules make the matrix print well.
+- **No geometry.** Connectors carry ids in `data-from`/`data-to`, never
+  coordinates, SVG or canvas: how far apart two boxes sit depends on the
+  stylesheet, so drawing is the site's job.
+
 
 ## Warning codes
 
@@ -229,7 +286,7 @@ site embeds the two fragments and owns its own stylesheet.
 ```console
 $ go test ./...          # fixtures, edge cases, invariants, goldens
 $ go test -race ./...
-$ go test ./... -update  # rewrite testdata/*.table.html and *.flow.html goldens
+$ go test ./... -update  # rewrite testdata/*.table.html, *.flow.html and *.doc.html goldens
 $ go test -run '^$' -fuzz '^FuzzParse$' -fuzztime 30s
 ```
 
@@ -264,17 +321,18 @@ verb, plus the pure-HTML scan (no `<style>`, `<script>`, `<svg>`, `<canvas>`,
 `testdata/<name>.table.html` and `testdata/<name>.flow.html`, so every fixture
 is rendered and compared through both views.
 
-`presentation_test.go` covers §4.3: it locates the shared baseline in the
-standalone page and compares the bytes (and asserts neither view fragment
-carries styling), scans the page for scripts, event handlers and external
-references, checks the switcher's wiring and its `:checked` rules (and that the
-inputs precede the panels, which the CSS sibling selectors depend on), checks
-the heading order, `lang`, the panel labelling and the scoped table headers,
-asserts the print rules, computes WCAG contrast ratios from the palette actually
-emitted, and keeps one committed standalone page (`testdata/chai.doc.html`)
-under golden test — the same artifact the browser check opens.
-`go test ./... -update` rewrites that golden along with the two per-view
-goldens.
+`document_test.go` covers §4.3 on the standalone page and the pure-HTML contract
+across the engine: `TestRenderOutputIsPureHTML` scans all three outputs for every
+fixture — and for the nil and empty recipes — against the banned-token list
+(`<style>`, `<script>`, `<input>`, `style=`, `--trn-`, `@media`, `url()`, `src=`,
+`href=`, event handlers, absolute URLs, SVG/canvas/image/iframe), so no code path
+can smuggle presentation or external references into the output. Around that it
+checks the page's `doctype`, `lang`, `<title>`, one `h1`, two `h2` sections, the
+heading order, both views present in order with their scoped table headers, the
+empty-title fallback (W6), escaping of every text field, and the nil-recipe page.
+It also keeps one committed standalone page (`testdata/chai.doc.html`) under
+golden test — the same artifact a browser opens. `go test ./... -update` rewrites
+that golden along with the two per-view goldens.
 
 `testdata/chai.trn.md` and `testdata/guacamole.trn.md` are the canonical examples
 from the spec; `testdata/kraft-dinner.trn.md` is the Kraft Dinner example from
@@ -317,10 +375,10 @@ $ cat recipe.trn.md | trn-render
 $ trn-render - < recipe.trn.md
 ```
 
-`--standalone` writes `RenderDocument`: one self-contained page, both views
-behind the CSS-only switcher, no request and no script. Without it the command
-writes the requested view fragment(s) — the matrix, the flow view, or both
-separated by a newline — which is what the site embeds.
+`--standalone` writes `RenderDocument`: one plain HTML page, the title and both
+views in document order, no stylesheet, no script and no request. Without it the
+command writes the requested view fragment(s) — the matrix, the flow view, or
+both separated by a newline — which is what the site embeds.
 
 Exit status is 0 for every document that was rendered, warnings or not; 1 if the
 input could not be read or the output could not be written; 2 for a usage error
@@ -455,43 +513,44 @@ The flow view's choices where §4.2 leaves room, each covered in `flow_test.go`:
     nothing else. Chip wrapping and long ingredient names are the site's too: the
     markup never truncates text, so a `<ul>` of chips can only wrap.
 
-The presentation layer's choices where §4.3 leaves room, each covered in
-`presentation_test.go`:
+The document wrapper's choices where §4.3/§5 leave room, each covered in
+`document_test.go`:
 
-22. **The view switcher is a radio group**, not a checkbox or a `:target` tab
-    pair (both of which the spec allows). Two views are mutually exclusive, and a
-    radio group already means exactly that: one of two checked, arrow keys moving
-    between them, the selected state announced by assistive technology, and no
-    state stored in the URL or in a control that reads as "on/off". Only
-    `:checked` is used as a selector, so the constraint that matters — zero
-    JavaScript — holds exactly as it would for a checkbox.
-23. **In the standalone page the title is shown once.** The page `h1` carries it;
-    the fragments keep their own `<caption>`/`<figcaption>` so a fragment used
-    alone is still self-describing, but in document context they are visually
-    hidden (the caption keeps naming the table for assistive technology) rather
-    than repeated above both views.
-24. **Print prints the matrix, whatever is selected on screen.** The tabular view
-    is the notation (§4.3, "the whole point of a notation") and the switcher is
-    screen chrome, so the engine's page suppresses the flow panel and the tabs in
-    print and forces the matrix panel visible. The matrix's own print styling
-    (landscape `@page`, 8pt fixed layout, repeated header row, unbreakable rows)
-    is **not** in the engine any more: the fragment is pure HTML, so the page
-    rules that used to travel inside it now belong to the site (SPEC-SITE §7),
-    which prints its own page.
+22. **The standalone page is a plain document.** §4.3 puts presentation in the
+    embedding site, so `RenderDocument` emits a doctype, `lang`, `<title>`, an
+    `h1` and one `<section>` per view named by its own `h2` — and nothing else:
+    no stylesheet, no switcher, no print rules. Both views are simply present in
+    order; whether they become tabs, a toggle or two pages is the site's
+    decision (SPEC-SITE §7). `TestRenderOutputIsPureHTML` scans the page, not
+    just the fragments, for `<style>`, `<script>`, `<input>`, `style=`,
+    `--trn-`, `@media` and every external reference, so the presentation layer
+    cannot creep back in.
+23. **The title is labelled at each level, and the duplicates stay.** The page
+    `h1` names the page, the table's `<caption>` names the table, the figure's
+    `<figcaption>` names the figure. Without CSS there is no way to hide the
+    inner labels, and hiding them would be presentation anyway: each is the
+    accessible name of its own element, and a fragment used alone still
+    describes itself. A site embedding the fragments hides its own copies.
+24. **Heading order is h1 → h2 per view → h3 flow boxes.** The sections carry no
+    `aria-labelledby` wiring any more because they need none: a `<section>` is
+    named by the heading inside it, so the `h2` that shows "Table" or "Flow" is
+    also its accessible name. The matrix stays a real `<table>` with
+    `<th scope="col">` for step columns and `<th scope="row">` for ingredients,
+    so a `rowspan` cell is announced with both its column and its row, and the
+    flow connectors stay text (`[n]` + the source verb), not just drawn.
 25. **`lang="en"` is stated by the engine's page.** The dialect carries no
     language, the site owns its own `<html>`, and §5 defines no CLI flag for it —
     so the one document the engine writes says the language it serves instead of
     omitting the attribute (which would leave screen readers guessing at
     pronunciation). A future `--lang` flag maps onto that constant.
 26. **A standalone page always carries both views; `--view` selects fragments.**
-    `--standalone` is §5's "wrap in `<!doctype html>…</html>`", and the engine's
-    page is the presentation layer's page: both views behind the switcher. The
-    CLI therefore hands `--standalone` to `RenderDocument` unchanged and lets
-    `--view` choose the fragment output only; the usage text says so rather than
-    leaving a flag quietly half-applied. `--view table --standalone` is not an
-    error — it is the page, whose print stylesheet already prints the matrix
-    whatever is selected (decision 24). A single-view page would need another
-    library API, not a second wrapper in `main.go`.
+    `--standalone` is §5's "wrap in `<!doctype html>…</html>`", and both views in
+    one file is what that page is for — there is no switcher, so it is simply the
+    matrix followed by the flow view. The CLI therefore hands `--standalone` to
+    `RenderDocument` unchanged and lets `--view` choose the fragment output only;
+    the usage text says so rather than leaving a flag quietly half-applied.
+    `--view table --standalone` is not an error, it is the page. A single-view
+    page would need another library API, not a second wrapper in `main.go`.
 27. **The CLI parses its own command line, GNU-style.** `flag` stops at the
     first positional argument, so `trn-render fixture.md --view table
     --standalone` — the order the acceptance criteria use — would lose its

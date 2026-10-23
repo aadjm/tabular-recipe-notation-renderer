@@ -3,7 +3,8 @@
 Every `<name>.trn.md` here is a TRN document; `<name>.table.html` and
 `<name>.flow.html` are its committed renderings of the two views, and
 `chai.doc.html` is a whole standalone page (`RenderDocument`) for the canonical
-chai fixture. `go test ./...` compares the renderers against those files;
+chai fixture — plain HTML, no stylesheet, both views in order. `go test ./...`
+compares the renderers against those files;
 `go test ./... -update` rewrites them (SPEC-ENGINE §6).
 
 ## Fixtures

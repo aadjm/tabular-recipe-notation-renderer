@@ -175,9 +175,10 @@ func TestStandaloneTitleOverride(t *testing.T) {
 }
 
 // TestStandaloneCarriesBothViews locks the documented interaction: a standalone
-// page is the RenderDocument page — both views behind the CSS-only switcher —
-// whatever --view says, because that page is what the switcher is for. The
-// flag selects fragments only.
+// page is the RenderDocument page — both views in one plain document, whatever
+// --view says. The flag selects fragments only. The page is pure HTML: it has
+// no switcher and no script, because styling and controls belong to the site
+// (SPEC-SITE §7).
 func TestStandaloneCarriesBothViews(t *testing.T) {
 	plain := runCLI(t, mustRead(t, chaiFixture), "--standalone")
 	for _, view := range []string{viewTable, viewFlow, viewBoth} {
@@ -189,11 +190,13 @@ func TestStandaloneCarriesBothViews(t *testing.T) {
 			t.Errorf("--standalone --view %s changed the page", view)
 		}
 	}
-	if !strings.Contains(plain.stdout, `id="trn-tab-flow"`) {
-		t.Error("standalone page has no view switcher")
+	if !strings.Contains(plain.stdout, `<table class="trn-table">`) || !strings.Contains(plain.stdout, `<figure class="trn-flow">`) {
+		t.Error("standalone page is missing one of the two views")
 	}
-	if strings.Contains(plain.stdout, "<script") {
-		t.Error("standalone page contains a script")
+	for _, bad := range []string{"<input", "<style", "<script", "trn-view-toggle"} {
+		if strings.Contains(plain.stdout, bad) {
+			t.Errorf("standalone page contains %q; the engine emits structure only (SPEC-ENGINE §4.3)", bad)
+		}
 	}
 }
 

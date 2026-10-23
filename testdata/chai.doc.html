@@ -4,38 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Masala Chai</title>
-<style>
-/* trn:shared:start */
-.trn{--trn-fg:#1c1b19;--trn-bg:#fffefb;--trn-line:#cdc7bb;--trn-head:#f2eee4;--trn-direct:#fff8e4;--trn-mark:#9a6b1f;--trn-muted:#6b655b;box-sizing:border-box;max-width:100%;color:var(--trn-fg);background:var(--trn-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:.95rem;line-height:1.35}
-@media (prefers-color-scheme:dark){.trn{--trn-fg:#e9e5dc;--trn-bg:#151412;--trn-line:#3b3833;--trn-head:#24211c;--trn-direct:#2a2517;--trn-mark:#e0b463;--trn-muted:#a49c8e}}
-@media print{.trn{--trn-fg:#000000;--trn-bg:#ffffff;--trn-line:#666666;--trn-head:#eeeeee;--trn-direct:#ffffff;--trn-mark:#000000;--trn-muted:#333333;color:#000;background:#fff;font-size:10pt}}
-/* trn:shared:end */
-:root{color-scheme:light dark}
-.trn-doc{margin:0;padding:1.25rem}
-.trn-doc-title{margin:0 0 .9rem;font-size:1.35rem;line-height:1.25}
-.trn-views{position:relative}
-.trn-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-.trn-view-toggle{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-.trn-tab{display:inline-block;margin:0 .3rem 0 0;padding:.35rem .8rem;border:1px solid var(--trn-line);border-bottom:0;border-radius:.4rem .4rem 0 0;background:var(--trn-head);color:var(--trn-muted);cursor:pointer;font-size:.9rem;font-weight:500}
-.trn-view-toggle:checked+.trn-tab{background:var(--trn-bg);color:var(--trn-fg);font-weight:600;border-color:var(--trn-mark)}
-.trn-view-toggle:focus-visible+.trn-tab{outline:2px solid var(--trn-mark);outline-offset:2px}
-.trn-panel{border:1px solid var(--trn-line);border-radius:0 .4rem .4rem;padding:.6rem}
-.trn-panel-flow{display:none}
-#trn-tab-flow:checked~.trn-panel-table{display:none}
-#trn-tab-flow:checked~.trn-panel-flow{display:block}
-.trn-doc .trn-title{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-@media print{.trn-doc{padding:0}.trn-view-toggle,.trn-tab{display:none}.trn-panel{border:0;border-radius:0;padding:0}.trn-panel-flow{display:none!important}.trn-panel-table{display:block!important}}
-</style>
 </head>
-<body class="trn trn-doc">
+<body class="trn-doc">
 <h1 class="trn-doc-title">Masala Chai</h1>
-<div class="trn-views">
-<input type="radio" name="trn-view" id="trn-tab-table" class="trn-view-toggle" checked>
-<label for="trn-tab-table" id="trn-label-table" class="trn-tab">Table</label>
-<input type="radio" name="trn-view" id="trn-tab-flow" class="trn-view-toggle">
-<label for="trn-tab-flow" id="trn-label-flow" class="trn-tab">Flow</label>
-<section class="trn-panel trn-panel-table" id="trn-panel-table" aria-labelledby="trn-label-table">
-<h2 class="trn-panel-heading trn-sr-only">Table</h2>
+<section class="trn-doc-view trn-doc-view-table">
+<h2 class="trn-doc-heading">Table</h2>
 <table class="trn-table"><caption class="trn-title">Masala Chai</caption>
 <thead>
 <tr class="trn-head">
@@ -67,8 +40,8 @@
 </table>
 
 </section>
-<section class="trn-panel trn-panel-flow" id="trn-panel-flow" aria-labelledby="trn-label-flow">
-<h2 class="trn-panel-heading trn-sr-only">Flow</h2>
+<section class="trn-doc-view trn-doc-view-flow">
+<h2 class="trn-doc-heading">Flow</h2>
 <figure class="trn-flow"><figcaption class="trn-title trn-flow-title">Masala Chai</figcaption>
 <ol class="trn-flow-steps"><li class="trn-flow-step" id="trn-flow-step-1">
 <div class="trn-flow-box">
@@ -99,6 +72,5 @@
 </figure>
 
 </section>
-</div>
 </body>
 </html>

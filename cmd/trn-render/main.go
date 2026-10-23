@@ -14,9 +14,10 @@
 // I/O failure exits non-zero for content reasons; a malformed command line is a
 // usage error (exit 2) and never consumes the input.
 //
-// The command is a thin wrapper: parsing, both views, the shared stylesheet and
-// the standalone page all live in the library, so the CLI and the site render
-// identical bytes (SPEC-ENGINE §5).
+// The command is a thin wrapper: parsing, both views and the standalone page
+// all live in the library, so the CLI and the site render identical bytes
+// (SPEC-ENGINE §5). The engine emits structure only — no stylesheet, no script,
+// no controls — so styling belongs to whoever embeds the output.
 package main
 
 import (
@@ -61,10 +62,10 @@ or follow the file argument.
 Without --standalone the output is the requested view fragment(s) — the matrix,
 the flow view, or both separated by a newline — which is what the TRN site
 embeds. With --standalone the output is the complete page from the library's
-RenderDocument: both views plus the CSS-only switcher, in one self-contained
-file. A standalone page always carries both views (that page is what the
-switcher is for), so --view selects fragments only; use --view without
---standalone when you want one view alone.
+RenderDocument: a title and both views in one plain HTML document. The engine
+emits structure only (no stylesheet, no script, no controls), so the page is
+unstyled; a standalone page always carries both views, so --view selects
+fragments only — use --view without --standalone when you want one view alone.
 
 Warnings (W1-W7) are reported on stderr, one "trn-render: CODE: message" line
 each, and never change the exit status.
