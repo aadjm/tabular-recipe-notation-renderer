@@ -105,6 +105,73 @@ cat examples/input/kraft-dinner.trn.md | trn-render --view flow --title "Mac & C
 | `1` | Input or output I/O error |
 | `2` | Command-line usage error |
 
+## Embedding in a Website
+
+### Primary Case: Embedding in a Go Web Server
+
+Every render function returns `html/template.HTML` (with all user-supplied text already escaped via `html/template`). In a Go HTTP handler, pass the returned `template.HTML` fields directly into your page template struct — `html/template` will inject the semantic HTML fragment without double-escaping it, while your site's own layout and CSS control the appearance and view switching:
+
+```go
+package main
+
+import (
+	"html/template"
+	"log"
+	"net/http"
+
+	trn "github.com/aadjm/tabular-recipe-notation-renderer"
+)
+
+var pageTmpl = template.Must(template.New("recipe").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+  <main>
+    <h1>{{.Title}}</h1>
+    <div class="recipe-table">{{.Table}}</div>
+    <div class="recipe-flow">{{.Flow}}</div>
+  </main>
+</body>
+</html>`))
+
+type recipePageData struct {
+	Title    string
+	Table    template.HTML
+	Flow     template.HTML
+	Warnings []trn.Warning
+}
+
+func recipeHandler(w http.ResponseWriter, r *http.Request) {
+	rawTRN := `Guacamole
+[1] Mash: 3 ripe avocados
+[2] Finely dice: 1/2 red onion, 1 jalapeno, 1 roma tomato
+[3] Juice: 1 lime
+[4] Fold together: #1, #2, #3, 1/4 cup chopped cilantro, 1 tsp salt`
+
+	recipe, warnings := trn.Parse(rawTRN)
+	warnings = append(warnings, trn.ConvergenceWarnings(recipe)...)
+
+	data := recipePageData{
+		Title:    recipe.Title,
+		Table:    trn.RenderTable(recipe), // title hidden by default
+		Flow:     trn.RenderFlow(recipe),  // title hidden by default
+		Warnings: warnings,
+	}
+
+	if err := pageTmpl.Execute(w, data); err != nil {
+		log.Printf("template execute: %v", err)
+	}
+}
+```
+
+### Non-Go Sites (Pre-generating Static HTML)
+
+For sites written in other languages or static site generators, run the `trn-render` CLI as a build or preprocessing step (or invoke it over `stdin`/`stdout`) to generate the HTML fragments or standalone pages ahead of time, then include or serve the generated HTML files directly from your application.
+
 ## Library Usage
 
 ```go
