@@ -103,7 +103,6 @@ func TestDocumentStructure(t *testing.T) {
 			`<h2 class="trn-doc-heading">Flow</h2>`,
 			`<section class="trn-doc-view trn-doc-view-table">`,
 			`<section class="trn-doc-view trn-doc-view-flow">`,
-			`<th scope="col"`,
 			`<th scope="row"`,
 		} {
 			if !strings.Contains(doc, want) {

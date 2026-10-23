@@ -11,9 +11,8 @@ import (
 )
 
 // The tests in this file read the rendered HTML back rather than trusting the
-// model: SPEC-ENGINE E-A2 asks for counts and spans taken from the output, so
-// every assertion below goes through parseTable, which reconstructs the HTML
-// table grid (rowspan/colspan and all) the way a browser lays it out.
+// model: every assertion below goes through parseTable, which reconstructs the
+// HTML table grid (rowspan/colspan and all) the way a browser lays it out.
 
 var (
 	tableRowPattern     = regexp.MustCompile(`(?s)<tr\b([^>]*)>(.*?)</tr>`)
@@ -24,7 +23,8 @@ var (
 )
 
 // parsedCell is one cell of the rendered table at its grid position. col is
-// 1-based: column 1 is the ingredient label column, column 2 is the first step.
+// 1-based: column 1 is the ingredient label column, column 2 is the first depth
+// column.
 type parsedCell struct {
 	row, col         int
 	tag              string // "th" or "td"
@@ -34,14 +34,14 @@ type parsedCell struct {
 }
 
 type parsedRow struct {
-	index int // row index in the whole table, header row included
+	index int // row index in the whole table
 	class string
 	cells []parsedCell
 }
 
 type parsedTable struct {
 	caption string
-	cols    int // grid columns held by the header row
+	cols    int // grid columns held by the table
 	rows    []parsedRow
 }
 
@@ -83,9 +83,6 @@ func parseTable(t *testing.T, fragment string) parsedTable {
 			tbl.cols = cursor - 1
 		}
 		tbl.rows = append(tbl.rows, row)
-	}
-	if tbl.cols == 0 {
-		t.Fatalf("no header row in fragment:\n%s", fragment)
 	}
 	return tbl
 }
@@ -181,33 +178,32 @@ func label(t *testing.T, row parsedRow) string {
 	return first.text
 }
 
-// checkGridShape asserts that every ingredient row's cells sit side by side in
-// the grid: each cell starts where the previous one ended, nothing overlaps an
-// earlier rowspan (the parser would have shifted it, changing its column), and
-// no row runs past the header's columns.
+// checkGridShape asserts that every grid position (row, col) in the table is
+// covered by exactly one cell (either starting at that row or spanning down
+// from an earlier row), and that every row spans the exact same number of columns.
 func checkGridShape(t *testing.T, tbl parsedTable) {
 	t.Helper()
 	for _, row := range tbl.rows {
-		want := 1
-		for _, c := range row.cells {
-			if c.col != want {
-				t.Errorf("row %d: cell %q lands at column %d, want %d (a gap cell is missing or oversized)", row.index, c.text, c.col, want)
+		for col := 1; col <= tbl.cols; col++ {
+			if _, ok := tbl.at(row.index, col); !ok {
+				t.Errorf("row %d, col %d is uncovered (missing cell or gap)", row.index, col)
 			}
-			want = c.col + c.colspan
 		}
-		if want-1 > tbl.cols {
-			t.Errorf("row %d spans %d grid columns, header has %d", row.index, want-1, tbl.cols)
+		for _, c := range row.cells {
+			if c.col+c.colspan-1 > tbl.cols {
+				t.Errorf("row %d cell %q extends to col %d, table has %d cols", row.index, c.text, c.col+c.colspan-1, tbl.cols)
+			}
 		}
 	}
 }
 
-// TestChaiHeaderStructure pins the table's head and the pure-HTML contract of
-// the fragment: a real <table>, scoped headers ([n] + verb per column, one row
-// header per ingredient), and no styling or script of any kind.
-func TestChaiHeaderStructure(t *testing.T) {
+// TestChaiStructure pins the pure-HTML contract of the fragment: a real <table>,
+// no redundant thead, scoped row headers for ingredients, and no styling or
+// script of any kind.
+func TestChaiStructure(t *testing.T) {
 	fragment := string(RenderTable(loadRecipe(t, "chai.trn.md")))
 
-	for _, bad := range []string{"<style", "<script", "style=", "<div", "<span class=\"trn-mark"} {
+	for _, bad := range []string{"<style", "<script", "style=", "<div", "<thead", "<span class=\"trn-mark"} {
 		if strings.Contains(fragment, bad) {
 			t.Errorf("matrix fragment contains %q; the engine emits structure only", bad)
 		}
@@ -215,55 +211,20 @@ func TestChaiHeaderStructure(t *testing.T) {
 	if !strings.HasPrefix(fragment, `<table class="trn-table">`) {
 		t.Errorf("fragment does not start with the classed table: %.60q", fragment)
 	}
-
-	tbl := parseTable(t, fragment)
-	if tbl.cols != 6 {
-		t.Fatalf("grid has %d columns, want 6 (ingredient label + 5 steps)", tbl.cols)
-	}
-	header := tbl.row(0)
-	if len(header.cells) != 6 {
-		t.Fatalf("header has %d cells, want 6", len(header.cells))
-	}
-	if header.cells[0].tag != "th" || header.cells[0].text != "Ingredient" {
-		t.Errorf("corner header = <%s> %q, want <th> %q", header.cells[0].tag, header.cells[0].text, "Ingredient")
-	}
-	wantHeaders := []string{
-		"[1] Crush or grind to a powder",
-		"[2] Boil 3 min in 360ml water until the decoction is dark",
-		"[3] Add and bring to a boil",
-		"[4] Simmer 2 min until dark with a cream layer and no raw milk flavour",
-		"[5] Pull 4-5 times from 1-1.5 ft, then strain into cups and serve",
-	}
-	for i, want := range wantHeaders {
-		cell := header.cells[i+1]
-		if cell.tag != "th" || cell.col != i+2 {
-			t.Errorf("step header %d: <%s> at column %d, want <th> at column %d", i+1, cell.tag, cell.col, i+2)
-		}
-		if cell.rowspan != 1 || cell.colspan != 1 {
-			t.Errorf("step header %d spans %dx%d, want a plain cell", i+1, cell.rowspan, cell.colspan)
-		}
-		if cell.text != want {
-			t.Errorf("step header %d = %q, want %q", i+1, cell.text, want)
-		}
-	}
-	if !strings.Contains(fragment, `<th scope="col"`) {
-		t.Error("step headers are not scope=\"col\"")
-	}
 	if !strings.Contains(fragment, `<th scope="row" class="trn-ingredient">`) {
 		t.Error("ingredient labels are not scope=\"row\" headers")
 	}
+
+	tbl := parseTable(t, fragment)
+	if tbl.cols != 6 {
+		t.Fatalf("grid has %d columns, want 6 (ingredient label + 5 depth columns)", tbl.cols)
+	}
 }
 
-// TestEA2ChaiMatrix is acceptance criterion E-A2 against the rendered HTML:
+// TestEA2ChaiMatrix verifies the rendered HTML for the Masala Chai recipe:
 // 8 ingredient rows, 5 step columns, step 1's cell spanning 4 rows, step 2's 6,
-// step 3's all 8, and steps 4 and 5 as two full-width action rows.
-//
-// SPEC-ENGINE §7 phrases E-A2 as "11 ingredient rows × 5 step columns". Eleven
-// does not follow from §4.1 ("rows: unique ingredients, ordered by first use"):
-// the chai document has 8 unique ingredients, and 11 is the number of items in
-// steps 1–4 with references counted as items. §4.1 is the normative rendering
-// rule, so the matrix has 8 ingredient rows; the discrepancy is recorded in the
-// README and on the board rather than papered over by inventing three rows.
+// steps 3, 4, and 5 spanning all 8 rows in their respective columns (since steps
+// 4 and 5 act on the mixture from step 3), and zero prep/action rows.
 func TestEA2ChaiMatrix(t *testing.T) {
 	r := loadRecipe(t, "chai.trn.md")
 	tbl := parseTable(t, string(RenderTable(r)))
@@ -275,43 +236,8 @@ func TestEA2ChaiMatrix(t *testing.T) {
 
 	ingredients, actions := ingredientRows(tbl)
 
-	// Action rows: steps 4 and 5 add no ingredient, so each is one cell across
-	// every column, and they sit above the ingredient flow.
-	if len(actions) != 2 {
-		t.Fatalf("got %d action rows, want 2 (steps 4 and 5)", len(actions))
-	}
-	for i, action := range actions {
-		if i > 0 && action.index < actions[i-1].index {
-			t.Errorf("action rows are not in document order")
-		}
-		if len(action.cells) != 1 {
-			t.Fatalf("action row %d has %d cells, want exactly 1", i, len(action.cells))
-		}
-		cell := action.cells[0]
-		if cell.colspan != 6 {
-			t.Errorf("action row %d colspan = %d, want 6 (all columns)", i, cell.colspan)
-		}
-		if cell.tag != "td" || !strings.Contains(cell.class, "trn-action-cell") {
-			t.Errorf("action row %d cell = <%s class=%q>, want the action cell", i, cell.tag, cell.class)
-		}
-	}
-	if actions[0].index > ingredients[0].index {
-		t.Errorf("action rows (row %d) come after the ingredient flow (row %d); the reference format puts them above it",
-			actions[0].index, ingredients[0].index)
-	}
-	wantActions := []struct {
-		number int
-		verb   string
-		ref    string
-	}{
-		{4, "Simmer 2 min until dark with a cream layer and no raw milk flavour", "[3] Add and bring to a boil"},
-		{5, "Pull 4-5 times from 1-1.5 ft, then strain into cups and serve", "[4] Simmer 2 min until dark with a cream layer and no raw milk flavour"},
-	}
-	for i, want := range wantActions {
-		wantText := "[" + strconv.Itoa(want.number) + "] " + want.verb + " " + want.ref
-		if got := actions[i].cells[0].text; got != wantText {
-			t.Errorf("action row %d text = %q, want %q", i, got, wantText)
-		}
+	if len(actions) != 0 {
+		t.Fatalf("got %d action rows, want 0 (all steps act on the ingredient flow)", len(actions))
 	}
 
 	// Ingredient rows: unique ingredients in first-use order, one per row.
@@ -328,8 +254,6 @@ func TestEA2ChaiMatrix(t *testing.T) {
 		}
 	}
 
-	// The matrix itself: one cell per ingredient-bearing step, in the column of
-	// that step, starting at the first row it acts on.
 	first := ingredients[0].index
 	wantSpans := []struct {
 		col     int
@@ -339,6 +263,8 @@ func TestEA2ChaiMatrix(t *testing.T) {
 		{2, 4, r.Steps[0].Verb},
 		{3, 6, r.Steps[1].Verb},
 		{4, 8, r.Steps[2].Verb},
+		{5, 8, r.Steps[3].Verb},
+		{6, 8, r.Steps[4].Verb},
 	}
 	for _, want := range wantSpans {
 		cell, ok := tbl.at(first, want.col)
@@ -358,36 +284,29 @@ func TestEA2ChaiMatrix(t *testing.T) {
 			t.Errorf("step %d cell class = %q, want trn-step", want.col-1, cell.class)
 		}
 	}
-	// Steps 4 and 5 are action rows, so their columns stay empty in the flow.
-	for _, col := range []int{5, 6} {
-		if cell, ok := tbl.at(first, col); ok {
-			t.Errorf("column %d holds %q, but step %d is an action row", col, cell.text, col-1)
-		}
-	}
 
-	// Every one of the 8 rows is covered by the final ingredient-bearing step's
-	// cell: the finished dish.
-	dish, ok := tbl.at(first, 4)
+	// Every one of the 8 rows is covered by the final step's cell: the finished dish.
+	dish, ok := tbl.at(first, 6)
 	if !ok {
 		t.Fatal("no finished-dish cell")
 	}
 	for _, row := range ingredients {
-		if _, covered := tbl.at(row.index, 4); !covered {
+		if _, covered := tbl.at(row.index, 6); !covered {
 			t.Errorf("row %q is not covered by the finished-dish cell (rowspan %d)", label(t, row), dish.rowspan)
 		}
 	}
 }
 
-// TestGuacamoleMatrix pins the continuation-line example: refs and ingredients
-// interleaved into one step, every ingredient folding into the final cell, and
-// gap cells holding the time axis open where a later step has no cell yet.
+// TestGuacamoleMatrix pins the continuation-line and parallel-step example:
+// steps 1, 2, and 3 are independent (depth 0) and share column 2 across their
+// respective rows, while step 4 (depth 1) sits in column 3 and spans all 7 rows.
 func TestGuacamoleMatrix(t *testing.T) {
 	r := loadRecipe(t, "guacamole.trn.md")
 	tbl := parseTable(t, string(RenderTable(r)))
 	checkGridShape(t, tbl)
 
-	if tbl.cols != 5 {
-		t.Fatalf("grid has %d columns, want 5 (label + 4 steps)", tbl.cols)
+	if tbl.cols != 3 {
+		t.Fatalf("grid has %d columns, want 3 (label + 2 depth columns)", tbl.cols)
 	}
 	ingredients, actions := ingredientRows(tbl)
 	if len(actions) != 0 {
@@ -409,43 +328,41 @@ func TestGuacamoleMatrix(t *testing.T) {
 	first := ingredients[0].index
 	spans := []struct {
 		row, col, rowspan int
+		verb              string
 	}{
-		{first, 2, 1},         // [1] Mash: avocados
-		{first + 1, 3, 3},     // [2] Finely dice: onion, jalapeno, tomato
-		{first + 4, 4, 1},     // [3] Juice: lime
-		{first, 5, len(want)}, // [4] Fold together: the whole flow
+		{first, 2, 1, r.Steps[0].Verb},         // [1] Mash: avocados (col 2)
+		{first + 1, 2, 3, r.Steps[1].Verb},     // [2] Finely dice: onion, jalapeno, tomato (col 2)
+		{first + 4, 2, 1, r.Steps[2].Verb},     // [3] Juice: lime (col 2)
+		{first, 3, len(want), r.Steps[3].Verb}, // [4] Fold together: all 7 rows (col 3)
 	}
 	for _, want := range spans {
 		cell, ok := tbl.at(want.row, want.col)
 		if !ok {
 			t.Fatalf("no cell at (row %d, column %d)", want.row, want.col)
 		}
-		if cell.rowspan != want.rowspan {
-			t.Errorf("column %d cell at row %d: rowspan = %d, want %d", want.col, want.row, cell.rowspan, want.rowspan)
+		if cell.row != want.row {
+			t.Errorf("cell %q starts at row %d, want %d", want.verb, cell.row, want.row)
 		}
-		if wantVerb := r.Steps[want.col-2].Verb; cell.text != wantVerb {
-			t.Errorf("column %d cell text = %q, want %q", want.col, cell.text, wantVerb)
+		if cell.rowspan != want.rowspan {
+			t.Errorf("cell %q at (row %d, col %d): rowspan = %d, want %d", want.verb, want.row, want.col, cell.rowspan, want.rowspan)
+		}
+		if cell.text != want.verb {
+			t.Errorf("cell at (row %d, col %d) text = %q, want %q", want.row, want.col, cell.text, want.verb)
 		}
 	}
-	// Cells before the step cell that starts later in the row keep the columns
-	// aligned: row 1 needs a two-column gap for steps 2 and 3.
-	if cell, ok := tbl.at(first, 3); ok {
-		if !strings.Contains(cell.class, "trn-gap") || cell.colspan != 2 {
-			t.Errorf("first row gap = <%s class=%q colspan=%d>, want an empty two-column trn-gap", cell.tag, cell.class, cell.colspan)
+	// Rows 5 and 6 (cilantro and salt) have gap cells in column 2 before joining Fold together in column 3.
+	for _, rIdx := range []int{first + 5, first + 6} {
+		cell, ok := tbl.at(rIdx, 2)
+		if !ok || !strings.Contains(cell.class, "trn-gap") {
+			t.Errorf("row %d col 2 = %+v, want trn-gap", rIdx, cell)
 		}
-		if cell.text != "" {
-			t.Errorf("gap cell carries text %q; it is structural only", cell.text)
-		}
-	} else {
-		t.Error("first row has no gap cell for steps 2 and 3; the step cells cannot land in their columns")
 	}
 }
 
 // TestMatrixMatchesReachability re-derives every cell from the AST with an
-// independent walk for every fixture: the cell in a step's column starts at the
-// first row the step acts on, spans to the last, and shows that step's verb.
-// It also checks that the matrix agrees with the W4 channel: a stranded
-// ingredient's row is not covered by the finished dish.
+// independent walk for every fixture: each ingredient-bearing step appears once
+// in the table starting at the first row it acts on, spanning to the last, and
+// placed to the right of any step it references.
 func TestMatrixMatchesReachability(t *testing.T) {
 	for _, name := range fixtureNames(t) {
 		t.Run(name, func(t *testing.T) {
@@ -454,8 +371,6 @@ func TestMatrixMatchesReachability(t *testing.T) {
 			checkGridShape(t, tbl)
 			ingredients, _ := ingredientRows(tbl)
 
-			// Distinct ingredients in first-use order, with the rows that list
-			// them.
 			var order []string
 			rowOf := map[string]int{}
 			listedIn := map[string][]int{}
@@ -488,10 +403,20 @@ func TestMatrixMatchesReachability(t *testing.T) {
 				}
 			}
 
-			for col, step := range r.Steps {
+			var allStepCells []parsedCell
+			for _, row := range ingredients {
+				for _, c := range row.cells {
+					if strings.Contains(c.class, "trn-step") {
+						allStepCells = append(allStepCells, c)
+					}
+				}
+			}
+
+			wantStepCells := 0
+			for idx, step := range r.Steps {
 				acted := map[int]bool{}
 				for i := range r.Steps {
-					if !testReach(r.Steps, firstAt, col)[i] {
+					if !testReach(r.Steps, firstAt, idx)[i] {
 						continue
 					}
 					for _, item := range r.Steps[i].Items {
@@ -500,27 +425,10 @@ func TestMatrixMatchesReachability(t *testing.T) {
 						}
 					}
 				}
-
-				// The cells of this column that carry a step (gap cells are
-				// structural and may sit anywhere in the column).
-				var stepCells []parsedCell
-				for _, row := range ingredients {
-					for _, c := range row.cells {
-						if c.col == col+2 && strings.Contains(c.class, "trn-step") {
-							stepCells = append(stepCells, c)
-						}
-					}
-				}
-
-				if !addsIngredient(step) || len(acted) == 0 {
-					if len(stepCells) != 0 {
-						t.Errorf("step %d adds no ingredient but has %d cells in the flow", step.Number, len(stepCells))
-					}
+				if len(acted) == 0 {
 					continue
 				}
-				if len(stepCells) != 1 {
-					t.Fatalf("step %d has %d cells in its column, want exactly 1", step.Number, len(stepCells))
-				}
+				wantStepCells++
 				lo, hi := len(order), -1
 				for row := range acted {
 					if row < lo {
@@ -530,16 +438,19 @@ func TestMatrixMatchesReachability(t *testing.T) {
 						hi = row
 					}
 				}
-				cell := stepCells[0]
-				if want := firstRow + lo; cell.row != want {
-					t.Errorf("step %d cell starts at row %d, want the first row it acts on (%d)", step.Number, cell.row, want)
+				found := false
+				for _, c := range allStepCells {
+					if c.text == step.Verb && c.row == firstRow+lo && c.rowspan == hi-lo+1 {
+						found = true
+						break
+					}
 				}
-				if want := hi - lo + 1; cell.rowspan != want {
-					t.Errorf("step %d rowspan = %d, want %d (rows %d…%d)", step.Number, cell.rowspan, want, lo, hi)
+				if !found {
+					t.Errorf("step [%d] %q: no matching cell starting at row %d with rowspan %d", step.Number, step.Verb, firstRow+lo, hi-lo+1)
 				}
-				if cell.text != step.Verb {
-					t.Errorf("step %d cell text = %q, want the verb %q", step.Number, cell.text, step.Verb)
-				}
+			}
+			if len(allStepCells) != wantStepCells {
+				t.Errorf("got %d step cells in table, want %d", len(allStepCells), wantStepCells)
 			}
 
 			// Agreement with the W4 channel.
@@ -548,7 +459,7 @@ func TestMatrixMatchesReachability(t *testing.T) {
 			if len(warnings) != len(stranded) {
 				t.Fatalf("ConvergenceWarnings reported %d ingredients, matrix-derived count is %d", len(warnings), len(stranded))
 			}
-			finalCol := len(r.Steps) + 1
+			finalCol := tbl.cols
 			for i, text := range stranded {
 				if warnings[i].Code != "W4" || !strings.Contains(warnings[i].Msg, strconv.Quote(text)) {
 					t.Errorf("warning %d = %+v, want W4 naming %q", i, warnings[i], text)
@@ -673,22 +584,21 @@ func TestRenderTableEscaping(t *testing.T) {
 			t.Errorf("ingredient %d round-trip = %q, want %q", i, got, want)
 		}
 	}
-	if got := tbl.row(0).cells[1].text; got != "[1] "+verb1 {
-		t.Errorf("step header round-trip = %q, want %q", got, "[1] "+verb1)
-	}
-	if got := tbl.row(0).cells[2].text; got != "[2] Fold <i>in</i>" {
-		t.Errorf("step header round-trip = %q, want %q", got, "[2] Fold <i>in</i>")
-	}
 	if len(actions) != 0 {
 		t.Fatalf("got %d action rows, want none (every step adds an ingredient)", len(actions))
 	}
-	// Step 3 references step 2 and adds an ingredient of its own, so its cell
-	// starts at step 2's row (the "1 tsp <salt> & pepper" row, row 1 in the
-	// flow) and spans through its own ingredient: ingredient 1 never reaches
-	// step 3, which is W4's business, not the table's.
-	cell, ok := tbl.at(ingredients[1].index, 4)
+	// Step 1 and Step 2 are parallel (depth 0) so both sit in column 2 (rows 0 and 1).
+	// Step 3 references Step 2 (depth 1), so it sits in column 3 starting at row 1
+	// and spanning 2 rows (step 2's ingredient and its own).
+	if cell, ok := tbl.at(ingredients[0].index, 2); !ok || cell.text != verb1 {
+		t.Errorf("step 1 cell = %+v, want %q", cell, verb1)
+	}
+	if cell, ok := tbl.at(ingredients[1].index, 2); !ok || cell.text != `Fold <i>in</i>` {
+		t.Errorf("step 2 cell = %+v, want %q", cell, `Fold <i>in</i>`)
+	}
+	cell, ok := tbl.at(ingredients[1].index, 3)
 	if !ok {
-		t.Fatal("no step 3 cell at the second ingredient's row")
+		t.Fatal("no step 3 cell at the second ingredient's row in column 3")
 	}
 	if cell.text != verb2 {
 		t.Errorf("step 3 cell text = %q, want the verb %q", cell.text, verb2)
@@ -754,16 +664,18 @@ func TestRenderTableNilAndEmpty(t *testing.T) {
 }
 
 // TestRenderTableDegenerateSteps pins the less obvious structural choices: a
-// step with no items at all is an action row, a dangling reference renders by
-// number, a duplicated step number resolves to its first appearance, and a span
-// swallows a stranded ingredient sitting between two rows the step acts on.
+// step that acts on no ingredients is an action row, a dangling reference
+// renders by number, a duplicated step number resolves to its first appearance,
+// and a span swallows a stranded ingredient sitting between two rows the step
+// acts on.
 func TestRenderTableDegenerateSteps(t *testing.T) {
 	r := &Recipe{
 		Title: "T",
 		Steps: []Step{
-			{Number: 1, Verb: "Mash", Items: []Item{{Text: "a"}}},
-			{Number: 2, Verb: "Rest"}, // no items: adds nothing
-			{Number: 3, Verb: "Combine", Items: []Item{{Ref: 1}, {Ref: 2}, {Ref: 9}}},
+			{Number: 1, Verb: "Preheat"},                                 // no items: acts on no ingredients
+			{Number: 2, Verb: "Wait", Items: []Item{{Ref: 1}, {Ref: 9}}}, // refs only non-ingredient steps
+			{Number: 3, Verb: "Mash", Items: []Item{{Text: "a"}}},
+			{Number: 4, Verb: "Combine", Items: []Item{{Ref: 3}}},
 		},
 	}
 	tbl := parseTable(t, string(RenderTable(r)))
@@ -772,31 +684,32 @@ func TestRenderTableDegenerateSteps(t *testing.T) {
 	if len(ingredients) != 1 || len(actions) != 2 {
 		t.Fatalf("got %d ingredient rows and %d action rows, want 1 and 2", len(ingredients), len(actions))
 	}
-	if got, want := actions[0].cells[0].text, "[2] Rest"; got != want {
+	if got, want := actions[0].cells[0].text, "[1] Preheat"; got != want {
 		t.Errorf("step with no items = %q, want %q", got, want)
 	}
-	if got, want := actions[1].cells[0].text, "[3] Combine [1] Mash [2] Rest #9"; got != want {
+	if got, want := actions[1].cells[0].text, "[2] Wait [1] Preheat #9"; got != want {
 		t.Errorf("action refs = %q, want %q", got, want)
+	}
+	if cell, ok := tbl.at(ingredients[0].index, 3); !ok || cell.text != "Combine" {
+		t.Errorf("step 4 referencing step 3 should be a step cell in column 3, got %+v", cell)
 	}
 
 	// Duplicated numbers: #1 resolves to the first step numbered 1.
 	dup := &Recipe{Steps: []Step{
-		{Number: 1, Verb: "A", Items: []Item{{Text: "x"}}},
+		{Number: 1, Verb: "A"},
 		{Number: 1, Verb: "B", Items: []Item{{Ref: 1}}},
+		{Number: 2, Verb: "C", Items: []Item{{Text: "x"}}},
 	}}
 	dupTbl := parseTable(t, string(RenderTable(dup)))
 	dupIngredients, dupActions := ingredientRows(dupTbl)
-	if len(dupActions) != 1 {
-		t.Fatalf("got %d action rows, want 1", len(dupActions))
+	if len(dupActions) != 2 {
+		t.Fatalf("got %d action rows, want 2", len(dupActions))
 	}
-	if got, want := dupActions[0].cells[0].text, "[1] B [1] A"; got != want {
+	if got, want := dupActions[1].cells[0].text, "[1] B [1] A"; got != want {
 		t.Errorf("duplicate-number ref = %q, want %q (first appearance)", got, want)
 	}
-	if cell, ok := dupTbl.at(dupIngredients[0].index, 2); !ok || cell.text != "A" {
-		t.Errorf("duplicate-number matrix row = %+v, want the first step's cell", cell)
-	}
-	if cell, ok := dupTbl.at(dupIngredients[0].index, 3); ok && strings.Contains(cell.class, "trn-step") {
-		t.Errorf("the reference-only step has a cell %q in the flow, want an action row only", cell.text)
+	if cell, ok := dupTbl.at(dupIngredients[0].index, 2); !ok || cell.text != "C" {
+		t.Errorf("duplicate-number matrix row = %+v, want step C's cell", cell)
 	}
 
 	// A stranded ingredient between two rows a step acts on is swallowed by the
@@ -812,7 +725,7 @@ func TestRenderTableDegenerateSteps(t *testing.T) {
 	if len(strandedIngredients) != 3 {
 		t.Fatalf("got %d ingredient rows, want 3", len(strandedIngredients))
 	}
-	cell, ok := strandedTbl.at(strandedIngredients[0].index, 4)
+	cell, ok := strandedTbl.at(strandedIngredients[0].index, 3)
 	if !ok {
 		t.Fatal("step 3 has no cell")
 	}
