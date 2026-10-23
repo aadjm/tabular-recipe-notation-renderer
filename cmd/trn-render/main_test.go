@@ -281,7 +281,7 @@ func TestWarningsAlsoReportedForFragments(t *testing.T) {
 	if got.code != exitOK {
 		t.Fatalf("exit = %d, want %d", got.code, exitOK)
 	}
-	if !strings.HasPrefix(got.stdout, `<div class="trn trn-view trn-view-table">`) {
+	if !strings.HasPrefix(got.stdout, `<table class="trn-table">`) {
 		t.Errorf("stdout is not the table fragment: %s", firstLines(got.stdout, 2))
 	}
 	if !strings.Contains(got.stderr, "W1: ") {

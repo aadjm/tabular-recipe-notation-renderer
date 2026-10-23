@@ -22,10 +22,12 @@ func markedShared(t *testing.T, html string) string {
 	return html[start : end+len("/* trn:shared:end */")]
 }
 
-// TestSharedStylesheetIsSingleSource is the structural half of §4.3's "all CSS
-// embedded, one presentation rule set": the two views and the standalone
-// document each embed the same baseline, byte for byte, and that baseline is
-// the sharedCSS constant rather than a copy that can drift.
+// TestSharedStylesheetIsSingleSource is the structural half of the presentation
+// layer: the views that still carry styling (the flow view and the standalone
+// document) embed the same baseline, byte for byte, and that baseline is the
+// sharedCSS constant rather than a copy that can drift. The matrix view is pure
+// HTML per SPEC-ENGINE §10 — it carries no stylesheet at all, and the test
+// asserts that instead.
 func TestSharedStylesheetIsSingleSource(t *testing.T) {
 	want := markedShared(t, sharedCSS)
 	if rest := strings.TrimPrefix(sharedCSS, want); rest != "\n" {
@@ -35,23 +37,25 @@ func TestSharedStylesheetIsSingleSource(t *testing.T) {
 	for _, name := range fixtureNames(t) {
 		r := loadRecipe(t, name)
 		for view, fragment := range map[string]string{
-			"table": string(RenderTable(r)),
-			"flow":  string(RenderFlow(r)),
-			"doc":   string(RenderDocument(r)),
+			"flow": string(RenderFlow(r)),
+			"doc":  string(RenderDocument(r)),
 		} {
 			if got := markedShared(t, fragment); got != want {
 				t.Errorf("%s/%s: embedded presentation baseline differs from sharedCSS", name, view)
 			}
 		}
+		if table := string(RenderTable(r)); strings.Contains(table, "<style") || strings.Contains(table, "--trn-fg:") {
+			t.Errorf("%s/table: the matrix fragment carries styling; the engine emits structure only (SPEC-ENGINE §10)", name)
+		}
 	}
 
 	// The baseline must be the only place the palette is declared: a view that
 	// re-declares --trn-fg would silently win over the shared block.
-	if n := strings.Count(string(RenderTable(&Recipe{})), "--trn-fg:"); n != 3 {
-		t.Errorf("light/dark/print --trn-fg declarations = %d, want 3 (one per mode)", n)
-	}
 	if n := strings.Count(string(RenderFlow(&Recipe{})), "--trn-fg:"); n != 3 {
 		t.Errorf("flow --trn-fg declarations = %d, want 3 (one per mode)", n)
+	}
+	if n := strings.Count(string(RenderTable(&Recipe{})), "--trn-fg:"); n != 0 {
+		t.Errorf("table --trn-fg declarations = %d, want 0 (pure HTML)", n)
 	}
 }
 
@@ -191,7 +195,7 @@ func TestDocumentStructure(t *testing.T) {
 				t.Errorf("%s: document is missing %q", name, want)
 			}
 		}
-		if strings.Index(doc, "trn-view-table") > strings.Index(doc, "trn-view-flow") {
+		if strings.Index(doc, `<table class="trn-table">`) > strings.Index(doc, "trn-view-flow") {
 			t.Errorf("%s: the tabular view must come first (it is the default)", name)
 		}
 
@@ -208,8 +212,10 @@ func TestDocumentStructure(t *testing.T) {
 // makes the tabular view the printed view, with no screen-only chrome.
 func TestDocumentPrint(t *testing.T) {
 	doc := string(RenderDocument(loadRecipe(t, "grocy-1.trn.md")))
-	// The print rules live in three stylesheets — the page chrome, the shared
-	// baseline and each view — so the check is over the whole document.
+	// The print rules live in two stylesheets — the page chrome and the shared
+	// baseline. The matrix view carries no stylesheet of its own any more
+	// (SPEC-ENGINE §10), so the table's print rules moved to the site; what the
+	// engine still promises is that the tabular panel is the printed one.
 	style := doc
 
 	for _, rule := range []string{
@@ -221,31 +227,17 @@ func TestDocumentPrint(t *testing.T) {
 		".trn-view-toggle,.trn-tab{display:none}",
 		".trn-panel-flow{display:none!important}",
 		".trn-panel-table{display:block!important}",
-		// the matrix prints as a table on a landscape page: it fits, the header
-		// repeats, and rows are not split across pages
-		"@media print{@page{size:landscape;margin:10mm}",
-		".trn-view-table .trn-table{font-size:8pt;table-layout:fixed;width:100%}",
-		".trn-view-table .trn-table th:first-child{width:15%}",
-		".trn-table thead th{white-space:normal}",
-		".trn-table thead{display:table-header-group}",
-		".trn-table tr{break-inside:avoid",
-		".trn-view-table{overflow:visible;padding:0}",
 	} {
 		if !strings.Contains(style, rule) {
 			t.Errorf("print stylesheet is missing %q", rule)
 		}
 	}
 
-	// The print rules must live in the view fragment, not only in the page
-	// chrome: the site embeds the fragment and prints its own page.
+	// The fragment itself is structure only: no print rules, no styling of any
+	// kind to smuggle into the site's page.
 	fragment := string(RenderTable(loadRecipe(t, "grocy-1.trn.md")))
-	for _, rule := range []string{
-		"@media print{@page{size:landscape;margin:10mm}",
-		".trn-table thead{display:table-header-group}",
-	} {
-		if !strings.Contains(fragment, rule) {
-			t.Errorf("table fragment is missing its print rule %q", rule)
-		}
+	if strings.Contains(fragment, "<style") || strings.Contains(fragment, "@media") {
+		t.Error("the matrix fragment carries styling; the site owns the print stylesheet (SPEC-ENGINE §4.3)")
 	}
 
 	// The forced-visibility rule has to beat the :checked rules, which are
@@ -338,7 +330,7 @@ func TestGoldenDocument(t *testing.T) {
 // text pairs must clear 4.5:1 (1.4.3) and the CSS-generated glyphs must clear
 // 3:1 (1.4.11).
 func TestPaletteContrast(t *testing.T) {
-	frag := string(RenderTable(&Recipe{}))
+	frag := string(RenderFlow(&Recipe{}))
 	lines := strings.Split(markedShared(t, frag), "\n")
 	blocks := map[string]string{}
 	for _, line := range lines {

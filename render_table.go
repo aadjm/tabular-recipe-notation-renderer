@@ -5,67 +5,55 @@ import (
 	"html/template"
 )
 
-// RenderTable renders a recipe as the Cooking-for-Engineers matrix view
-// (SPEC-ENGINE §4.1): one row per unique ingredient in first-appearance order,
-// one column per step in document order, and a spanning action row for every
-// step that adds no ingredient of its own.
+// RenderTable renders a recipe as the Cooking-for-Engineers recipe summary
+// table (SPEC-ENGINE §4.1): a semantic <table> in which every unique
+// ingredient is a row, every step is a column, and each step is ONE cell that
+// spans — with rowspan — exactly the ingredient rows it acts on: the
+// ingredients it lists plus every ingredient carried into it through a
+// back-reference chain.
 //
-// The returned fragment is self-contained — it carries its own classed markup
-// and its own stylesheet (light/dark via prefers-color-scheme, plus a print
-// stylesheet), uses no JavaScript, no external resources and no images, so the
-// embedding site can either use it as-is or re-skin it via the `trn-*` classes.
+// Steps that add no ingredient of their own (every item is a #reference) are
+// not cells in the flow; they render as full-width action rows above the
+// ingredient rows — the "preheat the oven" band of the reference format.
 //
-// All user text (title, verbs, ingredients) goes through html/template's
-// escaping paths; ingredient strings keep their bytes and differ only by HTML
-// escaping (SPEC-ENGINE §10). RenderTable never panics and never errors: a nil
-// recipe renders nothing, a document without steps renders an empty table.
+// The output is structure only: no <style>, no <script>, no view toggle, no
+// external resource. Styling and the view switcher belong to the embedding
+// site (SPEC-ENGINE §4.3). Every user string goes through html/template's
+// escaping paths, so ingredient text keeps its bytes and differs only by HTML
+// escaping (SPEC-ENGINE §10).
+//
+// RenderTable never panics and never errors: a nil recipe renders nothing, a
+// document without steps renders an empty table.
 func RenderTable(r *Recipe) template.HTML {
 	if r == nil {
 		return ""
 	}
 	var buf bytes.Buffer
-	// The shared presentation baseline (presentation.go) travels inside this
-	// fragment, so the fragment renders the same alone as it does inside
-	// RenderDocument's page.
-	err := tableTemplate.Execute(&buf, tableFragment{
-		CSS:        template.CSS(sharedCSS),
-		matrixView: buildMatrix(r),
-	})
-	if err != nil {
+	if err := tableTemplate.Execute(&buf, buildMatrix(r)); err != nil {
 		// Unreachable: the template is a compile-time constant and the data is
-		// plain strings and ints. Degrade to an empty fragment anyway — this
-		// package never turns a rendering problem into a panic.
+		// plain strings and ints. Degrade to an empty fragment rather than
+		// panic.
 		return ""
 	}
 	// Safe by construction: every byte of user text in buf was written by
-	// html/template's escaper, the rest is this package's own markup and CSS.
+	// html/template's escaper; the rest is this package's own markup.
 	return template.HTML(buf.String())
 }
 
-// matrixKind classifies a matrix cell.
-//
-// The values are the class suffixes the template switches on, so they are part
-// of the emitted markup as well as of the model.
+// matrixCell.Kind values, emitted as class suffixes as well as used by the
+// template.
 const (
-	cellEmpty  = "empty"  // ingredient neither listed in the step nor carried into it
-	cellDirect = "direct" // ingredient listed in the step: the cell shows the step verb
-	cellFlow   = "flow"   // ingredient reaches the step through back-references: flow marker
+	cellStep = "step" // a step's cell, spanning the ingredient rows it acts on
+	cellGap  = "gap"  // structural spacer keeping a row's cells in their columns
 )
-
-// tableFragment is the data set for the table template: the shared presentation
-// baseline plus the matrix model of one recipe.
-type tableFragment struct {
-	CSS template.CSS
-	matrixView
-}
 
 // matrixView is the whole data set handed to the table template.
 type matrixView struct {
 	Title   string
-	Steps   []matrixStep   // one column per step, document order
+	Steps   []matrixStep   // one column per step, document order (the time axis)
 	Rows    []matrixRow    // unique ingredients, first-appearance order
 	Actions []matrixAction // steps that add no ingredient, document order
-	ColSpan int            // ingredient header column + all step columns
+	ColSpan int            // ingredient label column + every step column
 }
 
 type matrixStep struct {
@@ -73,14 +61,18 @@ type matrixStep struct {
 	Verb   string
 }
 
+// matrixCell is one cell of an ingredient row, in grid order. A step cell
+// carries the step's verb and the rowspan it was given; a gap cell carries only
+// the colspan of the empty grid columns it holds open.
 type matrixCell struct {
-	Kind string // cellEmpty, cellDirect or cellFlow
-	Verb string // the step's verb, only for cellDirect
+	Kind string // cellStep or cellGap
+	Verb string // the step's verb, only for cellStep
+	Span int    // rowspan (cellStep) or colspan (cellGap)
 }
 
 type matrixRow struct {
 	Text  string
-	Cells []matrixCell // one per step, same order as matrixView.Steps
+	Cells []matrixCell // in column order, label column excluded
 }
 
 // matrixAction is a step whose items are all references (or which has no items
@@ -104,12 +96,29 @@ type stepRef struct {
 	Known  bool
 }
 
+// stepSpan is the cell one step contributes to the matrix: the run of
+// ingredient rows it spans and the verb it shows. ok is false for a step that
+// adds no ingredient of its own; such a step becomes an action row instead.
+//
+// The span runs from the step's first acted-on ingredient row to its last, so a
+// stranded ingredient sitting between two ingredients the step does act on is
+// swallowed by the span: an HTML rowspan cannot cover a non-contiguous set, and
+// the ingredient is already reported as W4. This is the C4E merging convention —
+// what one cell covers is one thing being worked on.
+type stepSpan struct {
+	ok    bool
+	first int
+	last  int
+	verb  string
+}
+
 // buildMatrix derives the matrix model from the AST.
 //
-// Reachability is precomputed once per column through ancestorSteps, so cells
-// are filled in O(steps × items) after that. The whole thing is O(steps² ×
-// items): quadratic in the number of steps, which is the right trade for
-// documents that have a dozen steps and a dozen ingredients.
+// Reachability comes from ancestorSteps, one call per step column (the same
+// closure ConvergenceWarnings uses, so the matrix and W4 can never disagree
+// about whether an ingredient reaches a step). Everything else is a linear walk
+// over the items: the whole build is O(steps² × items), which is the right
+// trade for documents that have a dozen steps.
 func buildMatrix(r *Recipe) matrixView {
 	m := matrixView{
 		Title:   r.Title,
@@ -119,12 +128,6 @@ func buildMatrix(r *Recipe) matrixView {
 		m.Steps = append(m.Steps, matrixStep{Number: step.Number, Verb: step.Verb})
 	}
 
-	// reach[col] marks every step that feeds column col, col itself included.
-	reach := make([][]bool, len(r.Steps))
-	for col := range r.Steps {
-		reach[col] = ancestorSteps(r, col)
-	}
-
 	// Unique ingredients in document order, plus the steps that list each of
 	// them directly. Ingredient identity is the exact item text (the dialect
 	// preserves it byte-for-byte), so map keys compare bytes, not case or shape.
@@ -132,8 +135,8 @@ func buildMatrix(r *Recipe) matrixView {
 	listedIn := make(map[string][]int, len(r.Steps))
 	for i, step := range r.Steps {
 		for _, item := range step.Items {
-			if item.Ref > 0 || item.Text == "" {
-				continue // references carry no ingredient text
+			if !isIngredient(item) {
+				continue
 			}
 			if _, seen := listedIn[item.Text]; !seen {
 				order = append(order, item.Text)
@@ -141,42 +144,60 @@ func buildMatrix(r *Recipe) matrixView {
 			listedIn[item.Text] = append(listedIn[item.Text], i)
 		}
 	}
+	rowOf := make(map[string]int, len(order))
+	for i, text := range order {
+		rowOf[text] = i
+	}
 
-	m.Rows = make([]matrixRow, 0, len(order))
-	for _, text := range order {
-		row := matrixRow{Text: text, Cells: make([]matrixCell, len(r.Steps))}
-		for col := range r.Steps {
-			switch {
-			case containsIndex(listedIn[text], col):
-				row.Cells[col] = matrixCell{Kind: cellDirect, Verb: r.Steps[col].Verb}
-			case anyTrue(reach[col], listedIn[text]):
-				row.Cells[col] = matrixCell{Kind: cellFlow}
-			default:
-				row.Cells[col] = matrixCell{Kind: cellEmpty}
+	// One cell per ingredient-bearing step: the rows it acts on are the rows of
+	// every ingredient listed in a step that feeds it (itself included).
+	spans := make([]stepSpan, len(r.Steps))
+	for col := range r.Steps {
+		if !addsIngredient(r.Steps[col]) {
+			continue // action row, not a cell
+		}
+		reach := ancestorSteps(r, col)
+		span := stepSpan{first: len(order), last: -1, verb: r.Steps[col].Verb}
+		for i := range r.Steps {
+			if i >= len(reach) || !reach[i] {
+				continue
+			}
+			for _, item := range r.Steps[i].Items {
+				if !isIngredient(item) {
+					continue
+				}
+				row := rowOf[item.Text]
+				if row < span.first {
+					span.first = row
+				}
+				if row > span.last {
+					span.last = row
+				}
 			}
 		}
-		m.Rows = append(m.Rows, row)
+		if span.first <= span.last {
+			span.ok = true
+			spans[col] = span
+		}
+	}
+
+	m.Rows = make([]matrixRow, len(order))
+	for row, text := range order {
+		m.Rows[row] = matrixRow{Text: text, Cells: cellsForRow(spans, row)}
 	}
 
 	firstAt := firstByNumber(r)
 	for _, step := range r.Steps {
-		var refs []int
-		addsIngredient := false
-		for _, item := range step.Items {
-			switch {
-			case item.Ref > 0:
-				refs = append(refs, item.Ref)
-			case item.Text != "":
-				addsIngredient = true
-			}
-		}
-		if addsIngredient {
+		if addsIngredient(step) {
 			continue
 		}
 		action := matrixAction{Number: step.Number, Verb: step.Verb}
-		for _, number := range refs {
-			ref := stepRef{Number: number}
-			if j, ok := firstAt[number]; ok {
+		for _, item := range step.Items {
+			if item.Ref <= 0 {
+				continue
+			}
+			ref := stepRef{Number: item.Ref}
+			if j, ok := firstAt[item.Ref]; ok {
 				ref.Known = true
 				ref.Verb = r.Steps[j].Verb
 			}
@@ -187,59 +208,91 @@ func buildMatrix(r *Recipe) matrixView {
 	return m
 }
 
-// containsIndex reports whether idx occurs in list.
-func containsIndex(list []int, idx int) bool {
-	for _, v := range list {
-		if v == idx {
+// cellsForRow builds one ingredient row's cells in grid order.
+//
+// A step cell belongs to the row where its span starts; every row the span
+// covers emits nothing for that column. A column that holds no cell at this row
+// but has cells to its right still has to be occupied, or the browser's implicit
+// grid would shift the later cells one column left — so a run of empty columns
+// becomes one classed gap cell (colspan), exactly like the blank "righthide"
+// cells in the reference table. Trailing empty columns emit nothing: the row
+// simply ends there.
+func cellsForRow(spans []stepSpan, row int) []matrixCell {
+	last := -1
+	for col, span := range spans {
+		if span.ok && span.first == row {
+			last = col
+		}
+	}
+	if last < 0 {
+		return nil // only the label: every column is covered by a span or empty
+	}
+
+	var cells []matrixCell
+	gap := 0
+	for col := 0; col <= last; col++ {
+		span := spans[col]
+		switch {
+		case span.ok && span.first == row:
+			if gap > 0 {
+				cells = append(cells, matrixCell{Kind: cellGap, Span: gap})
+				gap = 0
+			}
+			cells = append(cells, matrixCell{Kind: cellStep, Verb: span.verb, Span: span.last - span.first + 1})
+		case span.ok && row > span.first && row <= span.last:
+			// Covered by the span of a step above: the row holds no cell here.
+			if gap > 0 {
+				cells = append(cells, matrixCell{Kind: cellGap, Span: gap})
+				gap = 0
+			}
+		default:
+			gap++
+		}
+	}
+	return cells
+}
+
+// isIngredient reports whether an item is ingredient text rather than a
+// back-reference. Empty text is not an ingredient.
+func isIngredient(item Item) bool {
+	return item.Ref <= 0 && item.Text != ""
+}
+
+// addsIngredient reports whether a step introduces ingredient text of its own.
+// A step whose items are all references — or that has no items at all — adds
+// nothing, and renders as a full-width action row (SPEC-ENGINE §4.1).
+func addsIngredient(step Step) bool {
+	for _, item := range step.Items {
+		if isIngredient(item) {
 			return true
 		}
 	}
 	return false
 }
 
-// tableTemplate emits the matrix fragment. Literal markup and CSS live here;
-// every piece of user text is an action, so html/template escapes it in the
-// right context (text, attribute-free, CSS untouched).
+// tableTemplate emits the matrix fragment. Literal markup lives here; every
+// piece of user text is an action, so html/template escapes it in the right
+// context. There is no stylesheet, no script and no toggle in the output.
 //
-// The flow marker is a classed, empty span whose arrow glyph comes from CSS:
-// the cell carries no text at all, and the glyph is hidden from assistive
-// technology rather than read out (the surrounding row and column headers
-// already say which ingredient and which step it belongs to).
-var tableTemplate = template.Must(template.New("trn.table").Parse(`<div class="trn trn-view trn-view-table">
-<style>
-{{.CSS}}.trn-view-table{overflow-x:auto;padding:.5rem}
-.trn-table{border-collapse:collapse;width:100%}
-.trn-table caption{text-align:left;font-weight:600;padding:0 0 .5rem}
-.trn-table th,.trn-table td{border:1px solid var(--trn-line);padding:.35rem .5rem;vertical-align:top;text-align:left}
-.trn-table thead th{background:var(--trn-head);font-weight:600;white-space:nowrap}
-.trn-table tbody th.trn-ingredient{font-weight:500}
-.trn-step-num,.trn-action-num{font-variant-numeric:tabular-nums;color:var(--trn-muted)}
-.trn-cell-direct{background:var(--trn-direct)}
-.trn-mark::before{content:"→";color:var(--trn-mark);font-weight:700;opacity:.85}
-.trn-action-cell{background:var(--trn-head);font-weight:500}
-.trn-action-verb{font-weight:600}
-.trn-action-refs{margin-left:.5rem;color:var(--trn-muted);font-weight:400;font-size:.9em}
-.trn-action-refs::before{content:"← ";color:var(--trn-mark)}
-.trn-action-ref{display:inline-block}
-@media print{@page{size:landscape;margin:10mm}.trn-view-table{overflow:visible;padding:0}.trn-view-table .trn-table{font-size:8pt;table-layout:fixed;width:100%}.trn-view-table .trn-table th:first-child{width:15%}.trn-table th,.trn-table td{padding:.2rem .3rem;overflow-wrap:break-word}.trn-table thead th{white-space:normal}.trn-view-table .trn-table{caption-side:top}.trn-table tr{break-inside:avoid;page-break-inside:avoid}.trn-table thead{display:table-header-group}}
-</style>
-<table class="trn-table">
-{{if .Title}}<caption class="trn-title">{{.Title}}</caption>
-{{end}}<thead>
+// Column order is the document's order of steps, so the table reads left to
+// right as time. The action rows come first, above the ingredient flow, and
+// span every column.
+var tableTemplate = template.Must(template.New("trn.table").Parse(`<table class="trn-table">
+{{- if .Title}}<caption class="trn-title">{{.Title}}</caption>{{end}}
+<thead>
 <tr class="trn-head">
 <th scope="col" class="trn-corner">Ingredient</th>
-{{range .Steps}}<th scope="col" class="trn-step"><span class="trn-step-num">[{{.Number}}]</span> <span class="trn-step-verb">{{.Verb}}</span></th>
-{{end}}</tr>
+{{- range .Steps}}<th scope="col" class="trn-step trn-step-head"><span class="trn-step-num">[{{.Number}}]</span> <span class="trn-step-verb">{{.Verb}}</span></th>{{end}}
+</tr>
 </thead>
 <tbody>
-{{range .Rows}}<tr class="trn-row">
-<th scope="row" class="trn-ingredient">{{.Text}}</th>
-{{range .Cells}}{{if eq .Kind "direct"}}<td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">{{.Verb}}</span></td>{{else if eq .Kind "flow"}}<td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>{{else}}<td class="trn-cell trn-cell-empty"></td>{{end}}{{end}}
-</tr>
-{{end}}{{range .Actions}}<tr class="trn-action">
+{{- range .Actions}}<tr class="trn-action">
 <td class="trn-action-cell" colspan="{{$.ColSpan}}"><span class="trn-action-num">[{{.Number}}]</span> <span class="trn-action-verb">{{.Verb}}</span>{{if .Refs}} <span class="trn-action-refs">{{range .Refs}}<span class="trn-action-ref">{{if .Known}}[{{.Number}}] {{.Verb}}{{else}}#{{.Number}}{{end}}</span> {{end}}</span>{{end}}</td>
-</tr>
-{{end}}</tbody>
+</tr>{{end}}
+{{- range .Rows}}<tr class="trn-row">
+<th scope="row" class="trn-ingredient">{{.Text}}</th>
+{{- range .Cells}}{{if eq .Kind "step"}}<td class="trn-step"{{if gt .Span 1}} rowspan="{{.Span}}"{{end}}><span class="trn-step-verb">{{.Verb}}</span></td>{{else}}<td class="trn-gap"{{if gt .Span 1}} colspan="{{.Span}}"{{end}}></td>{{end}}{{end}}
+</tr>{{end}}
+</tbody>
 </table>
-</div>
 `))

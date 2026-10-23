@@ -1,66 +1,23 @@
-<div class="trn trn-view trn-view-table">
-<style>
-/* trn:shared:start */
-.trn{--trn-fg:#1c1b19;--trn-bg:#fffefb;--trn-line:#cdc7bb;--trn-head:#f2eee4;--trn-direct:#fff8e4;--trn-mark:#9a6b1f;--trn-muted:#6b655b;box-sizing:border-box;max-width:100%;color:var(--trn-fg);background:var(--trn-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:.95rem;line-height:1.35}
-@media (prefers-color-scheme:dark){.trn{--trn-fg:#e9e5dc;--trn-bg:#151412;--trn-line:#3b3833;--trn-head:#24211c;--trn-direct:#2a2517;--trn-mark:#e0b463;--trn-muted:#a49c8e}}
-@media print{.trn{--trn-fg:#000000;--trn-bg:#ffffff;--trn-line:#666666;--trn-head:#eeeeee;--trn-direct:#ffffff;--trn-mark:#000000;--trn-muted:#333333;color:#000;background:#fff;font-size:10pt}}
-/* trn:shared:end */
-.trn-view-table{overflow-x:auto;padding:.5rem}
-.trn-table{border-collapse:collapse;width:100%}
-.trn-table caption{text-align:left;font-weight:600;padding:0 0 .5rem}
-.trn-table th,.trn-table td{border:1px solid var(--trn-line);padding:.35rem .5rem;vertical-align:top;text-align:left}
-.trn-table thead th{background:var(--trn-head);font-weight:600;white-space:nowrap}
-.trn-table tbody th.trn-ingredient{font-weight:500}
-.trn-step-num,.trn-action-num{font-variant-numeric:tabular-nums;color:var(--trn-muted)}
-.trn-cell-direct{background:var(--trn-direct)}
-.trn-mark::before{content:"→";color:var(--trn-mark);font-weight:700;opacity:.85}
-.trn-action-cell{background:var(--trn-head);font-weight:500}
-.trn-action-verb{font-weight:600}
-.trn-action-refs{margin-left:.5rem;color:var(--trn-muted);font-weight:400;font-size:.9em}
-.trn-action-refs::before{content:"← ";color:var(--trn-mark)}
-.trn-action-ref{display:inline-block}
-@media print{@page{size:landscape;margin:10mm}.trn-view-table{overflow:visible;padding:0}.trn-view-table .trn-table{font-size:8pt;table-layout:fixed;width:100%}.trn-view-table .trn-table th:first-child{width:15%}.trn-table th,.trn-table td{padding:.2rem .3rem;overflow-wrap:break-word}.trn-table thead th{white-space:normal}.trn-view-table .trn-table{caption-side:top}.trn-table tr{break-inside:avoid;page-break-inside:avoid}.trn-table thead{display:table-header-group}}
-</style>
-<table class="trn-table">
-<caption class="trn-title">Guacamole</caption>
+<table class="trn-table"><caption class="trn-title">Guacamole</caption>
 <thead>
 <tr class="trn-head">
-<th scope="col" class="trn-corner">Ingredient</th>
-<th scope="col" class="trn-step"><span class="trn-step-num">[1]</span> <span class="trn-step-verb">Mash</span></th>
-<th scope="col" class="trn-step"><span class="trn-step-num">[2]</span> <span class="trn-step-verb">Finely dice</span></th>
-<th scope="col" class="trn-step"><span class="trn-step-num">[3]</span> <span class="trn-step-verb">Juice</span></th>
-<th scope="col" class="trn-step"><span class="trn-step-num">[4]</span> <span class="trn-step-verb">Fold together</span></th>
+<th scope="col" class="trn-corner">Ingredient</th><th scope="col" class="trn-step trn-step-head"><span class="trn-step-num">[1]</span> <span class="trn-step-verb">Mash</span></th><th scope="col" class="trn-step trn-step-head"><span class="trn-step-num">[2]</span> <span class="trn-step-verb">Finely dice</span></th><th scope="col" class="trn-step trn-step-head"><span class="trn-step-num">[3]</span> <span class="trn-step-verb">Juice</span></th><th scope="col" class="trn-step trn-step-head"><span class="trn-step-num">[4]</span> <span class="trn-step-verb">Fold together</span></th>
 </tr>
 </thead>
-<tbody>
-<tr class="trn-row">
-<th scope="row" class="trn-ingredient">3 ripe avocados</th>
-<td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Mash</span></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
-</tr>
-<tr class="trn-row">
-<th scope="row" class="trn-ingredient">1/2 red onion</th>
-<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Finely dice</span></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
-</tr>
-<tr class="trn-row">
+<tbody><tr class="trn-row">
+<th scope="row" class="trn-ingredient">3 ripe avocados</th><td class="trn-step"><span class="trn-step-verb">Mash</span></td><td class="trn-gap" colspan="2"></td><td class="trn-step" rowspan="7"><span class="trn-step-verb">Fold together</span></td>
+</tr><tr class="trn-row">
+<th scope="row" class="trn-ingredient">1/2 red onion</th><td class="trn-gap"></td><td class="trn-step" rowspan="3"><span class="trn-step-verb">Finely dice</span></td>
+</tr><tr class="trn-row">
 <th scope="row" class="trn-ingredient">1 jalapeno</th>
-<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Finely dice</span></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
-</tr>
-<tr class="trn-row">
+</tr><tr class="trn-row">
 <th scope="row" class="trn-ingredient">1 roma tomato</th>
-<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Finely dice</span></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
-</tr>
-<tr class="trn-row">
-<th scope="row" class="trn-ingredient">1 lime</th>
-<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Juice</span></td><td class="trn-cell trn-cell-flow"><span class="trn-mark" aria-hidden="true"></span></td>
-</tr>
-<tr class="trn-row">
+</tr><tr class="trn-row">
+<th scope="row" class="trn-ingredient">1 lime</th><td class="trn-gap" colspan="2"></td><td class="trn-step"><span class="trn-step-verb">Juice</span></td>
+</tr><tr class="trn-row">
 <th scope="row" class="trn-ingredient">1/4 cup chopped cilantro</th>
-<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Fold together</span></td>
-</tr>
-<tr class="trn-row">
+</tr><tr class="trn-row">
 <th scope="row" class="trn-ingredient">1 tsp salt</th>
-<td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-empty"></td><td class="trn-cell trn-cell-direct"><span class="trn-cell-verb">Fold together</span></td>
 </tr>
 </tbody>
 </table>
-</div>
